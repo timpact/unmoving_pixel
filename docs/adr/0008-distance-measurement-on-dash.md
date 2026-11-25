@@ -1,7 +1,7 @@
 # ADR 0008: Distance measurement on dash
 
 - Status: Accepted
-- Date: 2026-11-25
+- Date: 2026-11-25 (updated 2026-11-25: stopwatch behaviour)
 
 ## Context
 
@@ -30,11 +30,27 @@ Use option 3.
 - core sends the total distance in millimetres as `total_mm` (uint32, wraps at
   2^32 mm ≈ 4295 km) in every status frame. It is derived from the persistent total
   distance, so it survives power loss (with the loss described in ADR 0009).
-- When the button is pressed, dash stores the current `total_mm` as the start
-  value in its own NVS.
-- dash shows `measured = total_mm − start` using unsigned 32-bit arithmetic, so a
-  wrap-around of `total_mm` is handled automatically (valid for measurements
-  < 4295 km).
+- The measurement works like a stopwatch, with three buttons:
+  - **Start:** counting starts (or resumes after a stop).
+  - **Stop:** the value is frozen. Distance travelled while stopped (e.g. pushing
+    the scooter) is not counted.
+  - **Reset:** sets the value to 0 (allowed while running or stopped).
+- dash keeps the measurement state and stores it in its own NVS on every button
+  press (and only then):
+
+  | Field | Type | Meaning |
+  |---|---|---|
+  | running | bool | measurement is counting |
+  | accumulated_mm | uint32 | distance of all finished intervals |
+  | start_mm | uint32 | `total_mm` at the last start (valid while running) |
+
+- Displayed value:
+  `measured = accumulated_mm + (running ? total_mm − start_mm : 0)`,
+  using unsigned 32-bit arithmetic, so a wrap-around of `total_mm` is handled
+  automatically (valid for measurements < 4295 km).
+- On stop: `accumulated_mm += total_mm − start_mm`, `running = false`.
+- If the power fails while running, the measurement continues after restart:
+  `start_mm` and `total_mm` both survive (ADR 0009).
 - Plausibility check: if `measured` is implausibly large (e.g. core was replaced or
   its NVS was erased, so `total_mm` jumped backwards), dash resets the measurement
   to 0.
@@ -44,10 +60,11 @@ Use option 3.
 ## Consequences
 
 - No new command and no extra state on core. core stays the single source of
-  truth for distance; dash only stores when the measurement started.
+  truth for distance; dash only stores the measurement state (start, stop, sum).
 - The measurement survives power loss on both sides.
 - Lost frames do not cause errors: every frame carries the absolute value.
 - dash writes to its flash only once per button press (negligible wear).
+- Pushing the scooter or short breaks can be excluded by pressing stop.
 - Several independent measurements (e.g. "lap" and "ride") are possible on dash
   without protocol changes.
 - At 20 Hz and 4 m/s the raw value advances in 20 cm steps; smoothing or a higher

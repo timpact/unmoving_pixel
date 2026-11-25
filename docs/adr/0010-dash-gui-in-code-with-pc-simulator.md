@@ -1,0 +1,88 @@
+# ADR 0010: dash GUI defined in code, with a PC simulator
+
+- Status: Accepted
+- Date: 2026-11-25
+
+## Context
+
+The dash (ESP32-P4, 480×800 MIPI-DSI, GT911 touch, ADR 0001) needs a touch GUI.
+LVGL is the standard GUI library for this class of device and is supported by
+Espressif (`esp_lvgl_port`).
+
+Options for creating the GUI:
+
+1. **SquareLine Studio** (graphical editor, exports C code). Tried and rejected:
+   poor usability, and the board could not be configured in it.
+2. **LVGL Editor / XML-based UI.** Adds a second description language and tooling.
+3. **GUI written directly in C** against the LVGL API.
+
+Flashing the P4 for every GUI change is slow. A faster preview is needed.
+
+## Decision
+
+### GUI in code
+
+- The GUI is written in C against the LVGL API (LVGL 9.x). No GUI designer,
+  no generated code.
+- The GUI code is platform-independent: it only uses LVGL and a small data
+  interface (see below), never ESP-IDF APIs directly.
+
+### Code structure
+
+```
+dash/
+├── ui/      # GUI: screens, widgets, styles, fonts – LVGL only, no ESP-IDF
+├── main/    # ESP-IDF app: display + touch drivers, UART link, NVS, Wi-Fi
+└── sim/     # PC simulator: SDL2 window, simulated data source
+```
+
+- `ui/` talks to the rest of the system through a data interface:
+  - **Model in:** a struct with the current values (speed, distances, `total_mm`,
+    settings, pattern list, link state). The app (or the simulator) updates it,
+    the GUI reads it periodically (e.g. every 50 ms) and refreshes the widgets.
+  - **Actions out:** callbacks for user actions (start/stop/reset measurement,
+    set brightness, set overlay, select preset, …). The app turns them into UART commands
+    (ADR 0004); the simulator logs them and applies them to its simulated state.
+
+### PC simulator
+
+- `dash/sim/` builds the same `ui/` code natively on macOS with SDL2
+  (`brew install sdl2`), based on the official LVGL PC port. Window size 480×800,
+  the mouse acts as touch input.
+- A simulated data source plays back test rides (speed profile, distances), so
+  animations and the distance measurement can be checked without hardware.
+- Headless mode: the simulator can render without a window and write screenshots
+  (PNG) of each screen. This allows automated checks and reviewing GUI changes
+  without the board.
+- LVGL configuration (`lv_conf.h`, fonts, colour depth) is shared between
+  firmware and simulator, so the preview matches the device.
+
+### Screens
+
+Two screens, switched by swiping or by tabs at the screen edge:
+
+1. **Ride**
+   - Speed (large), trip and total distance
+   - Distance measurement (ADR 0008) with Start, Stop and Reset
+   - Link state: "--" when no valid frame for 500 ms (ADR 0004)
+2. **LED**
+   - Global brightness slider
+   - Pattern list (built-in and user patterns from core, ADR 0011, 0013)
+   - Overlay list (presets, ADR 0012) and sliders for the active overlay:
+     level at start, middle and end, fade length at start and end
+   - Button to enable the preset editor via Wi-Fi (ADR 0013), showing SSID,
+     password and URL as text and QR code
+
+Further screens (settings, diagnostics such as the NVS write counter) can be
+added later without changing this structure.
+
+## Consequences
+
+- GUI changes can be previewed on the Mac in seconds; flashing is only needed for
+  hardware-related work.
+- Screenshots from the simulator make GUI changes reviewable (also by tools).
+- The GUI must not call ESP-IDF APIs; this keeps it testable but requires the
+  model/action interface.
+- Fonts and images are compiled in as C arrays (LVGL font converter); large fonts
+  for the speed display cost flash, which is plentiful (16 MB).
+- LVGL frame buffers live in the dash PSRAM (32 MB, see architecture.md).

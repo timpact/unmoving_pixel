@@ -6,7 +6,8 @@
 ## Context
 
 The distance travelled has to be measured with a resolution of at least one count per
-4 mm (the LED pitch). Options considered:
+4 mm (finer than the LED pitch of ~6.9 mm, ADR 0003; sub-pixel rendering
+benefits from even finer resolution). Options considered:
 
 1. **Friction wheel** pressed against the tyre, mounted on the encoder shaft
 2. **Toothed belt** from a pulley attached to the wheel

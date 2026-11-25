@@ -34,7 +34,7 @@ core runs with PSRAM disabled (`CONFIG_SPIRAM` not set in `sdkconfig.defaults`).
 ## Consequences
 
 - core only has the internal SRAM (~512 KB). This is far more than needed: the
-  frame buffer for 125 SK9822 LEDs is ~500 bytes, odometer data a few bytes.
+  frame buffer for 72 SK9822 LEDs is ~300 bytes, odometer data a few bytes.
 - No PSRAM-related startup risk; faster startup (no memory test).
 - GPIO 35, 36 and 37 remain unusable: they are still wired to the in-package PSRAM.
 - If a later feature needs large buffers, use a module with working PSRAM

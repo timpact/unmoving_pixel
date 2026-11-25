@@ -39,7 +39,19 @@ Real-time part. Mounted next to the encoder and the LED strip with short wires
   100 ns–1 µs, `accum_count` enabled (counter is 16-bit)
 - LED output: SK9822 via hardware SPI with DMA (ADR 0003)
 - Render loop: position from encoder → pattern offset → sub-pixel rendering
-  → output; latency compensated by predicting `offset += v × latency`
+  → output; latency kept short (< 1 ms) and constant (ADR 0003); optional
+  compensation `offset += v × latency` with smoothed speed
+- Patterns (ground-fixed): repeating lists of segments with length (cm), colour
+  and brightness, hard edges; up to 2048 segments; built-in and up to 32 user
+  slots plus a RAM preview slot; rendered with a box filter over each LED
+  footprint (ADR 0011)
+- Overlay (strip-fixed, moves with the scooter): edge fade with two S-curves,
+  levels at start/middle/end and fade lengths; factor 0…1 per LED (ADR 0012)
+- Brightness per LED: pattern × overlay × global, split into SK9822 5-bit
+  current and 8-bit PWM, current limit (ADR 0012)
+- Presets (patterns, overlays) and LED settings stored in a separate NVS
+  partition `cfg`; built-in presets compiled from `presets/` in the repository;
+  settings saved 2 s after the last change (ADR 0011–0013)
 - Single source of truth for odometer values, stored in NVS (ADR 0009):
   every 100 m, on stop if ≥ 10 m since the last save, or on command from dash;
   number of writes is bounded by distance, a write counter is kept
@@ -50,14 +62,22 @@ Real-time part. Mounted next to the encoder and the LED strip with short wires
 
 ### dash – ESP32-P4 (Guition JC4880P443)
 
-Display only. 4.3", 480×800, MIPI-DSI, GT911 touch, 32 MB PSRAM, 16 MB flash,
-ESP32-C6 as Wi-Fi co-processor (not needed for core functionality).
+Display and user interface. 4.3", 480×800, MIPI-DSI, GT911 touch, 32 MB PSRAM,
+16 MB flash, ESP32-C6 as Wi-Fi co-processor (only used on demand for the pattern
+editor, ADR 0013; not needed for riding).
 
 - Shows speed (smoothed over 200–500 ms), trip and total distance, max speed,
   ride time, battery voltage
-- Distance measurement: button starts counting from 0, computed from `total_mm`;
-  only the start value is stored in dash NVS (ADR 0008)
-- Touch: select pattern, brightness, reset trip
+- Distance measurement: stopwatch with start/stop/reset, computed from
+  `total_mm`; only the measurement state is stored in dash NVS (ADR 0008)
+- GUI written in C with LVGL 9, previewed in a PC simulator on macOS
+  (`dash/ui`, `dash/main`, `dash/sim`, ADR 0010). Two screens:
+  - Ride: speed, trip/total distance, distance measurement (start/stop/reset)
+  - LED: global brightness, pattern list, overlay list and overlay sliders,
+    Wi-Fi editor on/off
+- Preset editor: on demand, dash opens a Wi-Fi access point and serves a web
+  editor for patterns and overlays; presets are validated and forwarded to core
+  over UART (ADR 0013)
 - Shows "--" if no valid frame was received for 500 ms
 - UART to core: UART1 on GPIO33 = RX, GPIO31 = TX (ADR 0006)
 - Chip revision v1.3 (confirmed on the board): support for revisions < 3.0 is
@@ -74,14 +94,14 @@ firmwares.
 
 | Item | Value |
 |---|---|
-| LED pitch (current strip) | 4 mm (250 LEDs/m) |
-| LEDs on 0.5 m | 125 |
+| LED strip | SK9822, 144 LEDs/m, pitch ~6.94 mm |
+| LEDs on 0.5 m | 72 |
 | Stutter per frame | v / fps |
 | Target speed | 4 m/s |
-| WS2812B, 125 LEDs | ~245 fps → ~16 mm at 4 m/s |
-| SK9822, 125 LEDs, 10 MHz SPI | ~2000+ fps → ~2 mm at 4 m/s |
-| Latency at 4 m/s | 1 ms ≙ 4 mm (one pitch) → compensation required |
-| Encoder resolution | ≥ 1 count per 4 mm of travel |
+| WS2812B, 125 LEDs (4 mm, for comparison) | ~245 fps → ~16 mm at 4 m/s |
+| SK9822, 72 LEDs, 10 MHz SPI | ~4000 fps → ~1 mm at 4 m/s |
+| Latency at 4 m/s | 1 ms ≙ 4 mm shift; constant shift is invisible, jitter is visible → keep latency constant |
+| Encoder resolution | ≥ 1 count per 4 mm of travel (finer than the LED pitch) |
 | Encoder shaft at 4 m/s (10:1, ~200 mm wheel) | ~3800 rpm |
 
 ## Build
@@ -105,9 +125,15 @@ See [`adr/`](adr/).
 | [0007](adr/0007-core-without-psram.md) | core runs without PSRAM | Accepted |
 | [0008](adr/0008-distance-measurement-on-dash.md) | Distance measurement on dash | Accepted |
 | [0009](adr/0009-odometer-persistence-policy.md) | Odometer persistence policy on core | Accepted |
+| [0010](adr/0010-dash-gui-in-code-with-pc-simulator.md) | dash GUI defined in code, with a PC simulator | Accepted |
+| [0011](adr/0011-led-pattern-model.md) | LED pattern model | Accepted |
+| [0012](adr/0012-led-brightness-and-strip-overlay.md) | LED brightness and strip overlay | Accepted |
+| [0013](adr/0013-preset-editor-via-wifi-and-repository-presets.md) | Preset editor via Wi-Fi on dash, presets in the repository | Accepted |
 
 ## Open points
 
-- SK9822 strip: check availability at 4 mm pitch (fallback 144 LEDs/m)
 - Measure wheel diameter; choose encoder model (≥ 5000 rpm) and gear ratio
-- Power supply (5 V, several A for the strip)
+- Power supply (5 V, several A for the strip); sets the LED current limit (ADR 0012)
+- core partition table: add NVS partition `cfg` (512 KB) for settings and presets
+- dash partition table: NVS, app, web editor files (ADR 0013)
+- ESP32-C6: check ESP-Hosted firmware version, update if needed (ADR 0013)
