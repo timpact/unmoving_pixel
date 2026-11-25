@@ -96,6 +96,7 @@ Three screens, switched by swiping or by tabs (icon above text) at the bottom:
 3. **Settings**
    - Display brightness (dash backlight, 5 … 100 %, stored on dash)
    - Resolution of the distance measurement display (ADR 0008)
+   - Backward travel in distance measurements: subtract or add (ADR 0015)
    - Encoder calibration by test ride, with history (ADR 0014)
    - Date and time (manual entry, ADR 0014)
 

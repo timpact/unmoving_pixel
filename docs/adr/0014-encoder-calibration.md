@@ -38,15 +38,16 @@ may be added later if it brings further benefits.
 
 1. On the settings screen the rider presses **"Calibrate"**. core starts counting
    raw encoder counts separately from the odometer (the odometer keeps running
-   with the old factor).
+   with the old factor). The count is **net** (forward +, backward −, ADR 0015):
+   the rider may ride past the reference mark and roll back.
 2. While active, core reports the raw count and the distance according to the
    current factor every 200 ms; the dash shows both.
 3. The rider rides or pushes the scooter over a known distance (e.g. 10 m along a
    tape measure) and presses **"Stop"**.
 4. The rider enters the true distance in cm on a numeric keypad.
 5. The dash shows old factor, new factor and the deviation in %. Plausibility:
-   - at least 5 m reference distance and at least 1,000 counts, otherwise the
-     result is rejected (too inaccurate)
+   - at least 5 m reference distance and at least 1,000 net counts, otherwise the
+     result is rejected (too inaccurate); a negative net count is rejected
    - deviation of more than 10 % from the current factor shows a warning that must
      be confirmed
 6. **"Apply"** sends the result to core; core computes and stores the new factor
@@ -64,7 +65,7 @@ core keeps the last **10** applied calibrations (ring buffer in `cfg`):
 | timestamp | uint32 | Unix time (s), 0 = unknown |
 | total_m | uint32 | total distance at calibration time |
 | ref_cm | uint32 | entered reference distance |
-| counts | uint32 | counted encoder steps |
+| counts | uint32 | counted net encoder steps (always positive when applied) |
 | nm_per_count | uint32 | resulting factor |
 
 The settings screen lists the history (date or "unknown", total distance, factor

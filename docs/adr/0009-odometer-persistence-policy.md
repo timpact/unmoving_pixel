@@ -40,10 +40,12 @@ limiting factor as long as the number of writes is bounded by distance.
    distance (at most one write per 10 m).
 3. **Manual saving:** dash can send a "save now" command; core saves immediately
    (and ACKs). Also bounded: ignored if nothing changed since the last save.
-4. **Write counter:** the odometer record contains a write counter that is
+4. **Direction:** trip and total count the travelled distance; backward movement
+   is added, with a 5 mm direction hysteresis against jitter (ADR 0015).
+5. **Write counter:** the odometer record contains a write counter that is
    incremented on every save. It is stored in the same blob (no extra write) and
    reported to dash for diagnostics.
-5. **NVS partition:** 64 KB in the custom partition table.
+6. **NVS partition:** 64 KB in the custom partition table.
 
 ## Consequences
 

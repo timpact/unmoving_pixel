@@ -55,6 +55,11 @@ void ui_fixed_num_set(ui_fixed_num_t *n, const char *text, const char *unit);
  * value is scaled by 10^decimals, e.g. (12345, 2) → "123,45". */
 void ui_fmt_fixed(char *buf, size_t len, int64_t value, int decimals);
 
+/* Local time (seconds since 1970-01-01) <-> calendar, e.g. "25.11.2026 16:30" */
+void ui_fmt_datetime(char *buf, size_t len, uint32_t t);
+uint32_t ui_make_time(int year, int month, int day, int hour, int minute);
+void ui_split_time(uint32_t t, int *year, int *month, int *day, int *hour, int *minute);
+
 /* Pages */
 void ui_ride_create(lv_obj_t *tab);
 void ui_ride_update(const ui_model_t *m);

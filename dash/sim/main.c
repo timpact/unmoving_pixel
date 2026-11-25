@@ -103,7 +103,7 @@ static void model_tick(void)
     ui_update(&s_model);
 }
 
-static int run_headless(const char *dir, uint32_t sim_s, bool measure)
+static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
 {
     lv_tick_set_cb(fake_tick);
     lv_display_t *disp = lv_display_create(HOR_RES, VER_RES);
@@ -113,7 +113,7 @@ static int run_headless(const char *dir, uint32_t sim_s, bool measure)
 
     ui_init(&sim_core_actions, ui_font_data, ui_font_data_size);
 
-    for (uint32_t t = 0; t < sim_s * 1000u; t += MODEL_PERIOD_MS) {
+    for (uint32_t t = 0; t < sim_ms; t += MODEL_PERIOD_MS) {
         if (measure && t == 5000u) {
             sim_core_actions.measure_start(NULL, 0);
         }
@@ -138,6 +138,23 @@ static int run_headless(const char *dir, uint32_t sim_s, bool measure)
 
     ui_show_tab(2);
     snapshot(dir, "settings");
+
+    /* Calibration: test ride for 4 s, then stop */
+    sim_core_actions.calib_start(NULL);
+    for (int i = 0; i < 80; i++) {
+        model_tick();
+        run_lvgl(MODEL_PERIOD_MS);
+    }
+    snapshot(dir, "calib_counting");
+    sim_core_actions.calib_stop(NULL);
+    model_tick();
+    snapshot(dir, "calib_input");
+
+    /* Apply a reference of 15 m (the simulated ride was ~15.2 m) and set the clock */
+    sim_core_actions.set_time(NULL, 1795000000u);
+    sim_core_actions.calib_apply(NULL, 1520);
+    model_tick();
+    snapshot(dir, "settings_after_calib");
     return 0;
 }
 
@@ -176,7 +193,7 @@ static int run_window(float zoom)
 int main(int argc, char **argv)
 {
     const char *shot_dir = NULL;
-    uint32_t sim_s = 20;
+    uint32_t sim_ms = 20000;
     bool measure = false;
     float zoom = 0.0f;
     sim_options_t opt = {0};
@@ -185,7 +202,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             shot_dir = argv[++i];
         } else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc) {
-            sim_s = (uint32_t)atoi(argv[++i]);
+            sim_ms = (uint32_t)(atof(argv[++i]) * 1000.0);
         } else if (strcmp(argv[i], "--measure") == 0) {
             measure = true;
         } else if (strcmp(argv[i], "--zoom") == 0 && i + 1 < argc) {
@@ -201,5 +218,5 @@ int main(int argc, char **argv)
     lv_init();
     sim_core_init(&opt);
 
-    return shot_dir ? run_headless(shot_dir, sim_s, measure) : run_window(zoom);
+    return shot_dir ? run_headless(shot_dir, sim_ms, measure) : run_window(zoom);
 }

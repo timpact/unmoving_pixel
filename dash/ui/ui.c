@@ -116,6 +116,46 @@ void ui_fixed_num_set(ui_fixed_num_t *n, const char *text, const char *unit)
     ui_set_text(n->unit, unit ? unit : "");
 }
 
+/* Calendar conversion (proleptic Gregorian, H. Hinnant's days_from_civil) */
+static int64_t days_from_civil(int y, int m, int d)
+{
+    y -= m <= 2;
+    int64_t era = (y >= 0 ? y : y - 399) / 400;
+    int64_t yoe = y - era * 400;
+    int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+uint32_t ui_make_time(int year, int month, int day, int hour, int minute)
+{
+    return (uint32_t)(days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60);
+}
+
+void ui_split_time(uint32_t t, int *year, int *month, int *day, int *hour, int *minute)
+{
+    int64_t z = t / 86400 + 719468;
+    int64_t era = z / 146097;
+    int64_t doe = z - era * 146097;
+    int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int64_t mp = (5 * doy + 2) / 153;
+    int d = (int)(doy - (153 * mp + 2) / 5 + 1);
+    int m = (int)(mp < 10 ? mp + 3 : mp - 9);
+    *year = (int)(yoe + era * 400 + (m <= 2));
+    *month = m;
+    *day = d;
+    *hour = (int)(t % 86400 / 3600);
+    *minute = (int)(t % 3600 / 60);
+}
+
+void ui_fmt_datetime(char *buf, size_t len, uint32_t t)
+{
+    int y, mo, d, h, mi;
+    ui_split_time(t, &y, &mo, &d, &h, &mi);
+    lv_snprintf(buf, len, "%02d.%02d.%04d %02d:%02d", d, mo, y, h, mi);
+}
+
 void ui_fmt_fixed(char *buf, size_t len, int64_t value, int decimals)
 {
     char digits[32];

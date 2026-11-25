@@ -43,6 +43,10 @@
 #define LV_USE_SWITCH   1
 #define LV_USE_TABVIEW  1
 #define LV_USE_QRCODE   1
+#define LV_USE_TEXTAREA 1
+#define LV_USE_KEYBOARD 1
+#define LV_USE_BUTTONMATRIX 1
+#define LV_USE_ROLLER   1
 
 #define LV_USE_LOG 1
 #define LV_LOG_LEVEL LV_LOG_LEVEL_WARN

@@ -28,6 +28,20 @@ extern "C" {
 
 #define UI_MEASURE_COUNT 2        /* independent distance measurements (ADR 0008) */
 
+/* Encoder calibration (ADR 0014) */
+#define UI_CALIB_IDLE     0
+#define UI_CALIB_COUNTING 1
+#define UI_CALIB_STOPPED  2
+#define UI_CALIB_HISTORY  10
+
+typedef struct {
+    uint32_t timestamp;      /* local time, seconds since 1970-01-01; 0 = unknown */
+    uint32_t total_m;        /* total distance at calibration time */
+    uint32_t ref_cm;         /* entered reference distance */
+    uint32_t counts;         /* counted encoder steps */
+    uint32_t nm_per_count;   /* resulting factor */
+} ui_calib_entry_t;
+
 typedef struct {
     uint8_t slot;
     bool    builtin;
@@ -45,19 +59,33 @@ typedef struct {
     bool link_ok;
 
     /* Ride values */
-    uint16_t speed_mm_s;        /* smoothed speed for display */
+    int16_t  speed_mm_s;        /* smoothed speed for display; negative = backward (ADR 0015) */
     uint32_t trip_m;
     uint32_t total_m;
     uint16_t battery_mv;        /* 0 = unknown */
 
     /* Distance measurements (ADR 0008), already computed by the app */
-    uint32_t measure_mm[UI_MEASURE_COUNT];
+    int32_t  measure_mm[UI_MEASURE_COUNT];   /* may be negative in net mode */
     bool     measure_running[UI_MEASURE_COUNT];
+
+    /* Encoder calibration (ADR 0014), reported by core */
+    uint8_t  calib_state;             /* UI_CALIB_* */
+    int32_t  calib_counts;            /* net counts of the running test ride (ADR 0015) */
+    int32_t  calib_distance_mm;       /* same distance with the current factor */
+    uint32_t nm_per_count;            /* current factor */
+    uint8_t  calib_history_count;     /* newest entry first */
+    ui_calib_entry_t calib_history[UI_CALIB_HISTORY];
+
+    /* Clock on the dash (no RTC: valid only after it was set) */
+    bool     time_valid;
+    uint32_t time_now;                /* local time, seconds since 1970-01-01 */
 
     /* dash settings (stored on the dash) */
     uint8_t display_brightness;   /* 5 … 100 % */
     uint8_t measure_decimals;     /* resolution of the measurement display in metres:
                                      0 = 1 m, 1 = 10 cm, 2 = 1 cm */
+    bool    measure_add_backward; /* false: backward travel is subtracted (default),
+                                     true: backward travel is added (ADR 0015) */
 
     /* LED settings (ADR 0012) */
     uint8_t      global_brightness;   /* 0 … 100 % */
@@ -83,10 +111,16 @@ typedef struct {
     void (*measure_reset)(void *ctx, uint8_t index);
     void (*set_display_brightness)(void *ctx, uint8_t percent);
     void (*set_measure_decimals)(void *ctx, uint8_t decimals);
+    void (*set_measure_add_backward)(void *ctx, bool add);
     void (*set_brightness)(void *ctx, uint8_t percent);
     void (*set_overlay)(void *ctx, const up_overlay_t *overlay);
     void (*select_preset)(void *ctx, uint8_t category, uint8_t slot);
     void (*set_editor)(void *ctx, bool on);
+    void (*calib_start)(void *ctx);
+    void (*calib_stop)(void *ctx);
+    void (*calib_apply)(void *ctx, uint32_t ref_cm);   /* the app adds the timestamp */
+    void (*calib_discard)(void *ctx);
+    void (*set_time)(void *ctx, uint32_t local_time);
 } ui_actions_t;
 
 /*

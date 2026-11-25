@@ -38,12 +38,12 @@ sent by core, 0x80–0xFF by dash.
 
 | Type | Name | When | Payload |
 |---|---|---|---|
-| 0x01 | STATUS | every 50 ms | see below (23 bytes) |
+| 0x01 | STATUS | every 50 ms | see below (27 bytes) |
 | 0x02 | SETTINGS | at start, on every change, on request | see below |
 | 0x03 | PRESET_LIST | on request | `category`, `index`, `count`, then up to 11 entries |
 | 0x04 | PRESET_HEADER | on request (GET_PRESET) | `category`, `slot`, preset header |
 | 0x05 | PRESET_CHUNK | after PRESET_HEADER | `chunk_index` (uint16), data (≤ 240 bytes) |
-| 0x06 | CALIB_STATUS | every 200 ms while a calibration is active, and after stop | `state` (uint8: idle, counting, stopped), `counts` (uint32), distance with current factor (uint32, mm) (ADR 0014) |
+| 0x06 | CALIB_STATUS | every 200 ms while a calibration is active, and after stop | `state` (uint8: idle, counting, stopped), `counts` (int32, net), distance with current factor (int32, mm) (ADR 0014, 0015) |
 | 0x07 | CALIB_HISTORY | on request and after CALIB_APPLY | current `nm_per_count` (uint32), `count`, then up to 10 entries of 20 bytes (ADR 0014) |
 | 0x7F | ACK | answer to every command | `seq`, `status` (0 = OK, else error code) |
 
@@ -51,10 +51,11 @@ STATUS payload:
 
 | Field | Type | Unit / meaning |
 |---|---|---|
-| speed | uint16 | mm/s |
+| speed | int16 | mm/s, forward +, backward − (ADR 0015) |
 | trip distance | uint32 | m |
 | total distance | uint32 | m |
-| total_mm | uint32 | mm, total distance, wraps at 2^32 (ADR 0008) |
+| total_mm | uint32 | mm, travelled distance (backward added, with hysteresis), wraps at 2^32 (ADR 0008, 0015) |
+| position_mm | uint32 | mm, net position (backward subtracted), wraps at 2^32, interpret differences as int32 (ADR 0015) |
 | active_pattern | uint8 | active pattern slot |
 | error_bits | uint16 | error flags |
 | battery | uint16 | mV |
@@ -115,7 +116,7 @@ ACK carrying the same `seq`.
   typical pattern with a few dozen segments well below 0.1 s.
 - STATUS frames continue during preset transfers.
 - Slider commands are rate-limited on the dash (≤ 20/s, ADR 0012).
-- Link load: STATUS frame = 29 bytes; at 20 Hz ≈ 5.8 kbit/s (~5 % of 115200 baud);
+- Link load: STATUS frame = 33 bytes; at 20 Hz ≈ 6.6 kbit/s (~6 % of 115200 baud);
   commands and preset transfers are short bursts.
 
 ### Ownership and failure behaviour

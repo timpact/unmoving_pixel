@@ -21,6 +21,7 @@ typedef struct {
 static lv_obj_t *s_link;
 static lv_obj_t *s_battery;
 static lv_obj_t *s_arc;
+static lv_obj_t *s_unit;
 static ui_fixed_num_t s_speed;
 static ui_fixed_num_t s_trip;
 static ui_fixed_num_t s_total;
@@ -142,8 +143,9 @@ void ui_ride_create(lv_obj_t *tab)
     ui_fixed_num_create(&s_speed, speed_box, 448, SPEED_COMMA_X,
                         ui_fonts.speed, UI_COL_TEXT, ui_fonts.speed_dec, UI_COL_MUTED);
     lv_obj_align(s_speed.box, LV_ALIGN_CENTER, 0, -16);
-    lv_obj_t *unit = ui_label(speed_box, ui_fonts.small, UI_COL_MUTED, "km/h");
-    lv_obj_align(unit, LV_ALIGN_CENTER, 0, 66);
+    s_unit = ui_label(speed_box, ui_fonts.small, UI_COL_MUTED, "km/h");
+    lv_obj_align(s_unit, LV_ALIGN_CENTER, 0, 66);
+    lv_obj_set_style_text_align(s_unit, LV_TEXT_ALIGN_CENTER, 0);
 
     /* Trip and total distance, close to the speedometer */
     lv_obj_t *row = plain_row(tab);
@@ -168,19 +170,21 @@ static void fmt_km(char *buf, size_t len, uint32_t meters, int decimals)
     ui_fmt_fixed(buf, len, meters / div, decimals);
 }
 
-static void measure_card_update(measure_card_t *c, uint32_t mm, bool running, uint8_t decimals)
+static void measure_card_update(measure_card_t *c, int32_t mm, bool running, uint8_t decimals)
 {
     char buf[32];
     if (decimals > 2) {
         decimals = 2;
     }
 
-    if (mm < 100000000u) {                 /* < 100 km: metres */
+    int64_t v = mm;                        /* may be negative in net mode (ADR 0015) */
+    int64_t mag = v < 0 ? -v : v;
+    if (mag < 100000000) {                 /* < 100 km: metres */
         int64_t div = decimals == 2 ? 10 : decimals == 1 ? 100 : 1000;
-        ui_fmt_fixed(buf, sizeof(buf), mm / div, decimals);
+        ui_fmt_fixed(buf, sizeof(buf), v / div, decimals);
         ui_fixed_num_set(&c->value, buf, "m");
     } else {                               /* ≥ 100 km: km with metre resolution */
-        ui_fmt_fixed(buf, sizeof(buf), mm / 1000u, 3);
+        ui_fmt_fixed(buf, sizeof(buf), v / 1000, 3);
         ui_fixed_num_set(&c->value, buf, "km");
     }
 
@@ -212,7 +216,10 @@ void ui_ride_update(const ui_model_t *m)
 
     if (m->link_ok) {
         /* mm/s → km/h ×10: v × 3.6 / 100 */
-        uint32_t kmh_x10 = ((uint32_t)m->speed_mm_s * 36u + 500u) / 1000u;
+        bool backward = m->speed_mm_s < 0;
+        uint32_t mag = (uint32_t)(backward ? -(int32_t)m->speed_mm_s : m->speed_mm_s);
+        uint32_t kmh_x10 = (mag * 36u + 500u) / 1000u;
+        ui_set_text(s_unit, backward && kmh_x10 > 0 ? "km/h\nrückwärts" : "km/h");
         ui_fmt_fixed(buf, sizeof(buf), kmh_x10, 1);
         ui_fixed_num_set(&s_speed, buf, NULL);
         lv_arc_set_value(s_arc, kmh_x10 > SPEED_MAX_KMH_X10 ? SPEED_MAX_KMH_X10 : (int32_t)kmh_x10);
@@ -223,6 +230,7 @@ void ui_ride_update(const ui_model_t *m)
         ui_fixed_num_set(&s_total, buf, "km");
     } else {
         ui_fixed_num_set(&s_speed, "--", NULL);
+        ui_set_text(s_unit, "km/h");
         lv_arc_set_value(s_arc, 0);
         ui_fixed_num_set(&s_trip, "--", NULL);
         ui_fixed_num_set(&s_total, "--", NULL);

@@ -57,6 +57,10 @@ Use option 3.
 - Plausibility check: if `measured` is implausibly large (e.g. core was replaced or
   its NVS was erased, so `total_mm` jumped backwards), dash resets the measurement
   to 0.
+- **Direction of travel** (ADR 0015): by default backward movement is subtracted
+  (net distance, based on `position_mm`); a setting switches to adding it
+  (based on `total_mm`). The formulas below apply to the selected counter. In net
+  mode values can be negative.
 - **Display resolution** is a dash setting (settings screen, stored in dash NVS):
   1 m, 10 cm or 1 cm. Values from 100 km on are shown in km with metre
   resolution. The internal value is always in mm.
