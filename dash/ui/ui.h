@@ -135,6 +135,8 @@ void ui_update(const ui_model_t *model);
 /* For the simulator and screenshots */
 void ui_show_tab(uint32_t index);
 void ui_scroll_led_page(bool to_bottom);
+/* Simulate keypad input and a tap on the main button of the calibration dialog */
+void ui_calib_test_input(const char *ref_cm, bool press_main);
 
 #define UI_TAB_RIDE     0
 #define UI_TAB_LED      1

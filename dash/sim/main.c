@@ -90,7 +90,7 @@ static void snapshot(const char *dir, const char *name)
 {
     char path[512];
     lv_obj_invalidate(lv_screen_active());
-    run_lvgl(100);
+    run_lvgl(500);   /* let style transitions finish */
     lv_refr_now(NULL);
     snprintf(path, sizeof(path), "%s/%s.bmp", dir, name);
     write_bmp(path);
@@ -149,6 +149,13 @@ static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
     sim_core_actions.calib_stop(NULL);
     model_tick();
     snapshot(dir, "calib_input");
+
+    /* Wrong reference (10 m instead of ~15 m): warning, then confirmation step */
+    ui_calib_test_input("1000", false);
+    snapshot(dir, "calib_warn");
+    ui_calib_test_input(NULL, true);
+    snapshot(dir, "calib_confirm");
+    ui_calib_test_input("1520", false);
 
     /* Apply a reference of 15 m (the simulated ride was ~15.2 m) and set the clock */
     sim_core_actions.set_time(NULL, 1795000000u);

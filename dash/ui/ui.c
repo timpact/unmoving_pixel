@@ -66,15 +66,19 @@ lv_obj_t *ui_card(lv_obj_t *parent, const char *title)
     return card;
 }
 
+/* y offset that puts the baseline of `font` on the baseline of `ref` (both labels at y = 0) */
+static int32_t baseline_offset(const lv_font_t *ref, const lv_font_t *font)
+{
+    return (lv_font_get_line_height(ref) - ref->base_line) - (lv_font_get_line_height(font) - font->base_line);
+}
+
 void ui_fixed_num_create(ui_fixed_num_t *n, lv_obj_t *parent, int32_t width, int32_t comma_x,
-                         const lv_font_t *int_font, lv_color_t int_color,
+                         int decimals_max, const lv_font_t *int_font, lv_color_t int_color,
                          const lv_font_t *rest_font, lv_color_t rest_color)
 {
-    const int32_t h = lv_font_get_line_height(int_font);
-
     n->box = lv_obj_create(parent);
     lv_obj_remove_style_all(n->box);
-    lv_obj_set_size(n->box, width, h);
+    lv_obj_set_size(n->box, width, lv_font_get_line_height(int_font));
     lv_obj_remove_flag(n->box, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(n->box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 
@@ -83,22 +87,22 @@ void ui_fixed_num_create(ui_fixed_num_t *n, lv_obj_t *parent, int32_t width, int
     lv_obj_set_style_text_align(n->int_part, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(n->int_part, 0, 0);
 
-    /* Decimals and unit: bottom-aligned row, padded so that all baselines match */
-    lv_obj_t *tail = lv_obj_create(n->box);
-    lv_obj_remove_style_all(tail);
-    lv_obj_set_size(tail, 240, h);
-    lv_obj_set_pos(tail, comma_x, 0);
-    lv_obj_add_flag(tail, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-    lv_obj_remove_flag(tail, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(tail, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(tail, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
-    lv_obj_set_style_pad_column(tail, 6, 0);
+    n->rest = ui_label(n->box, rest_font, rest_color, "");
+    lv_obj_set_pos(n->rest, comma_x, baseline_offset(int_font, rest_font));
 
-    n->rest = ui_label(tail, rest_font, rest_color, "");
-    lv_obj_set_style_pad_bottom(n->rest, int_font->base_line - rest_font->base_line, 0);
-
-    n->unit = ui_label(tail, ui_fonts.small, UI_COL_MUTED, "");
-    lv_obj_set_style_pad_bottom(n->unit, int_font->base_line - ui_fonts.small->base_line, 0);
+    /* The unit gets a fixed position: room for the comma and the widest digit
+     * in every decimal place, so it never moves with the digits. */
+    int32_t digit_w = 0;
+    for (uint32_t c = '0'; c <= '9'; c++) {
+        int32_t w = lv_font_get_glyph_width(rest_font, c, 0);
+        digit_w = w > digit_w ? w : digit_w;
+    }
+    int32_t unit_x = comma_x + 6;
+    if (decimals_max > 0) {
+        unit_x += lv_font_get_glyph_width(rest_font, ',', 0) + decimals_max * digit_w;
+    }
+    n->unit = ui_label(n->box, ui_fonts.small, UI_COL_MUTED, "");
+    lv_obj_set_pos(n->unit, unit_x, baseline_offset(int_font, ui_fonts.small));
 }
 
 void ui_fixed_num_set(ui_fixed_num_t *n, const char *text, const char *unit)

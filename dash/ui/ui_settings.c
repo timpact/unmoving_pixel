@@ -18,7 +18,12 @@ static lv_obj_t *s_disp_val;
 static lv_obj_t *s_resolution;
 static lv_obj_t *s_backward;
 static lv_obj_t *s_factor;
-static lv_obj_t *s_history;
+/* History table: header + UI_CALIB_HISTORY rows, 4 fixed-width columns */
+#define HIST_COLS 4
+static const int32_t k_hist_w[HIST_COLS] = {150, 78, 88, 100};   /* sum = 416 = card content width */
+static lv_obj_t *s_hist_rows[UI_CALIB_HISTORY];
+static lv_obj_t *s_hist_cell[UI_CALIB_HISTORY][HIST_COLS];
+static lv_obj_t *s_hist_empty;
 static lv_obj_t *s_time_val;
 
 /* Calibration dialog */
@@ -148,13 +153,16 @@ static void cal_update_result(void)
         char pct[24];
         fmt_factor(f, sizeof(f), nm);
         fmt_percent(pct, sizeof(pct), dev);
-        lv_snprintf(buf, sizeof(buf), "Neuer Faktor: %s\nAbweichung: %s", f, pct);
-        ui_set_text(s_cal_result, buf);
         bool warn = dev > WARN_DEVIATION || dev < -WARN_DEVIATION;
+        lv_snprintf(buf, sizeof(buf), "%sNeuer Faktor: %s\nAbweichung: %s",
+                    warn ? LV_SYMBOL_WARNING "  Abweichung über 10 % – Strecke und Eingabe prüfen.\n" : "",
+                    f, pct);
+        ui_set_text(s_cal_result, buf);
         lv_obj_set_style_text_color(s_cal_result, warn ? UI_COL_WARN : UI_COL_OK, 0);
         lv_obj_remove_state(s_cal_btn_main, LV_STATE_DISABLED);
     }
     ui_set_text(s_cal_btn_main_label, "Übernehmen");
+    lv_obj_set_style_bg_color(s_cal_btn_main, UI_COL_OK, 0);
 }
 
 static void cal_start_cb(lv_event_t *e)
@@ -182,7 +190,12 @@ static void cal_main_cb(lv_event_t *e)
     bool warn = dev > WARN_DEVIATION || dev < -WARN_DEVIATION;
     if (warn && !s_confirm_pending) {
         s_confirm_pending = true;   /* large deviation: ask a second time */
-        ui_set_text(s_cal_btn_main_label, "Wirklich übernehmen?");
+        char buf[200];
+        lv_snprintf(buf, sizeof(buf), "%s\nTrotzdem übernehmen? Zum Bestätigen erneut tippen.",
+                    lv_label_get_text(s_cal_result));
+        ui_set_text(s_cal_result, buf);
+        lv_obj_set_style_bg_color(s_cal_btn_main, UI_COL_WARN, 0);
+        ui_set_text(s_cal_btn_main_label, "Bestätigen");
         return;
     }
     if (ui_actions.calib_apply) {
@@ -259,7 +272,7 @@ static void cal_show_state(uint8_t state)
     switch (state) {
     case UI_CALIB_COUNTING:
         lv_obj_remove_flag(s_cal, LV_OBJ_FLAG_HIDDEN);
-        ui_set_text(s_cal_title, LV_SYMBOL_GPS "  Messfahrt läuft");
+        ui_set_text(s_cal_title, LV_SYMBOL_GPS "  Kalibrierfahrt läuft");
         ui_set_text(s_cal_hint, "Strecke in m nach bisherigem Faktor. Eine bekannte Strecke fahren "
                                 "oder schieben (z. B. 10 m entlang eines Maßbands), dann Stopp drücken. "
                                 "Überfahren und Zurückrollen ist erlaubt, es zählt die Netto-Strecke.");
@@ -381,6 +394,8 @@ static void time_dialog_create(void)
 
 /* ---- page --------------------------------------------------------------- */
 
+static void history_table_create(lv_obj_t *card);
+
 static void disp_cb(lv_event_t *e)
 {
     int32_t v = lv_slider_get_value(lv_event_get_target(e));
@@ -445,13 +460,10 @@ void ui_settings_create(lv_obj_t *tab)
     /* Encoder calibration (ADR 0014) */
     card = ui_card(tab, "Drehgeber-Kalibrierung");
     s_factor = ui_label(card, ui_fonts.text, UI_COL_TEXT, "");
-    lv_obj_t *b = button(card, LV_SYMBOL_GPS "  Messfahrt starten", UI_COL_ACCENT, cal_start_cb, NULL);
+    lv_obj_t *b = button(card, LV_SYMBOL_GPS "  Kalibrierfahrt starten", UI_COL_ACCENT, cal_start_cb, NULL);
     lv_obj_set_width(b, lv_pct(100));
-    ui_label(card, ui_fonts.small, UI_COL_MUTED, "Verlauf in µm/Schritt (neueste zuerst)");
-    s_history = ui_label(card, ui_fonts.small, UI_COL_TEXT, "");
-    lv_label_set_long_mode(s_history, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(s_history, lv_pct(100));
-    lv_obj_set_style_text_line_space(s_history, 6, 0);
+    ui_label(card, ui_fonts.small, UI_COL_MUTED, "Verlauf, Faktor in µm/Schritt (neueste zuerst)");
+    history_table_create(card);
 
     /* Date and time (no RTC on the board, ADR 0014) */
     card = ui_card(tab, "Datum und Uhrzeit");
@@ -462,6 +474,55 @@ void ui_settings_create(lv_obj_t *tab)
 
     cal_create();
     time_dialog_create();
+}
+
+static lv_obj_t *hist_row(lv_obj_t *parent, lv_obj_t **cells, lv_color_t color)
+{
+    lv_obj_t *r = lv_obj_create(parent);
+    lv_obj_remove_style_all(r);
+    lv_obj_set_size(r, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_ver(r, 5, 0);
+    lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_width(r, 1, 0);
+    lv_obj_set_style_border_color(r, UI_COL_BORDER, 0);
+    for (int c = 0; c < HIST_COLS; c++) {
+        cells[c] = ui_label(r, ui_fonts.small, color, "");
+        lv_obj_set_width(cells[c], k_hist_w[c]);
+        lv_obj_set_style_text_align(cells[c], c == 0 ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
+    }
+    return r;
+}
+
+static void history_table_create(lv_obj_t *card)
+{
+    lv_obj_t *table = lv_obj_create(card);
+    lv_obj_remove_style_all(table);
+    lv_obj_set_size(table, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(table, LV_FLEX_FLOW_COLUMN);
+
+    lv_obj_t *head[HIST_COLS];
+    hist_row(table, head, UI_COL_MUTED);
+    lv_label_set_text(head[0], "Datum");
+    lv_label_set_text(head[1], "km");
+    lv_label_set_text(head[2], "Faktor");
+    lv_label_set_text(head[3], "Änderung");
+
+    for (int i = 0; i < UI_CALIB_HISTORY; i++) {
+        s_hist_rows[i] = hist_row(table, s_hist_cell[i], UI_COL_TEXT);
+        lv_obj_add_flag(s_hist_rows[i], LV_OBJ_FLAG_HIDDEN);
+    }
+    s_hist_empty = ui_label(table, ui_fonts.small, UI_COL_MUTED, "noch keine Kalibrierung");
+}
+
+void ui_calib_test_input(const char *ref_cm, bool press_main)
+{
+    if (ref_cm != NULL) {
+        lv_textarea_set_text(s_cal_ta, ref_cm);   /* sends LV_EVENT_VALUE_CHANGED */
+    }
+    if (press_main) {
+        lv_obj_send_event(s_cal_btn_main, LV_EVENT_CLICKED, NULL);
+    }
 }
 
 static void history_update(const ui_model_t *m)
@@ -482,34 +543,46 @@ static void history_update(const ui_model_t *m)
     lv_snprintf(buf, sizeof(buf), "Faktor: %s", f);
     ui_set_text(s_factor, buf);
 
-    static char text[UI_CALIB_HISTORY * 96];
-    text[0] = '\0';
-    if (m->calib_history_count == 0) {
-        strcpy(text, "noch keine Kalibrierung");
+    int n = m->calib_history_count < UI_CALIB_HISTORY ? m->calib_history_count : UI_CALIB_HISTORY;
+    if (n == 0) {
+        lv_obj_remove_flag(s_hist_empty, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_hist_empty, LV_OBJ_FLAG_HIDDEN);
     }
-    for (int i = 0; i < m->calib_history_count && i < UI_CALIB_HISTORY; i++) {
-        const ui_calib_entry_t *c = &m->calib_history[i];
-        char date[24];
-        char km[24];
-        char dev[24] = "";
-        if (c->timestamp != 0) {
-            ui_fmt_datetime(date, sizeof(date), c->timestamp);
-        } else {
-            strcpy(date, "Datum unbekannt");
+    for (int i = 0; i < UI_CALIB_HISTORY; i++) {
+        if (i >= n) {
+            lv_obj_add_flag(s_hist_rows[i], LV_OBJ_FLAG_HIDDEN);
+            continue;
         }
-        ui_fmt_fixed(km, sizeof(km), c->total_m / 1000u, 0);
-        ui_fmt_fixed(f, sizeof(f), c->nm_per_count, 3);
-        if (i + 1 < m->calib_history_count && m->calib_history[i + 1].nm_per_count != 0) {
+        lv_obj_remove_flag(s_hist_rows[i], LV_OBJ_FLAG_HIDDEN);
+        const ui_calib_entry_t *c = &m->calib_history[i];
+        char cell[32];
+
+        if (c->timestamp != 0) {
+            int y, mo, d, h, mi;
+            ui_split_time(c->timestamp, &y, &mo, &d, &h, &mi);
+            lv_snprintf(cell, sizeof(cell), "%02d.%02d.%02d %02d:%02d", d, mo, y % 100, h, mi);
+        } else {
+            strcpy(cell, "unbekannt");
+        }
+        ui_set_text(s_hist_cell[i][0], cell);
+
+        ui_fmt_fixed(cell, sizeof(cell), c->total_m / 1000u, 0);
+        ui_set_text(s_hist_cell[i][1], cell);
+
+        ui_fmt_fixed(cell, sizeof(cell), c->nm_per_count, 3);
+        ui_set_text(s_hist_cell[i][2], cell);
+
+        cell[0] = '\0';
+        if (i + 1 < n && m->calib_history[i + 1].nm_per_count != 0) {
             float d = ((float)c->nm_per_count - (float)m->calib_history[i + 1].nm_per_count) * 100.0f /
                       (float)m->calib_history[i + 1].nm_per_count;
-            char pct[20];
-            fmt_percent(pct, sizeof(pct), d);
-            lv_snprintf(dev, sizeof(dev), "  (%s)", pct);
+            fmt_percent(cell, sizeof(cell), d);
+        } else {
+            strcpy(cell, "–");
         }
-        lv_snprintf(buf, sizeof(buf), "%s%s · %s km · %s%s", i ? "\n" : "", date, km, f, dev);
-        strcat(text, buf);
+        ui_set_text(s_hist_cell[i][3], cell);
     }
-    ui_set_text(s_history, text);
 }
 
 void ui_settings_update(const ui_model_t *m)

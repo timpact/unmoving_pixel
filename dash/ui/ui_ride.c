@@ -62,14 +62,14 @@ static lv_obj_t *plain_row(lv_obj_t *parent)
     return r;
 }
 
-static void distance_card(lv_obj_t *parent, const char *title, ui_fixed_num_t *num)
+static void distance_card(lv_obj_t *parent, const char *title, ui_fixed_num_t *num, int decimals)
 {
     lv_obj_t *card = ui_card(parent, title);
     lv_obj_set_flex_grow(card, 1);
     lv_obj_set_width(card, 0);   /* share the row width equally */
     lv_obj_set_style_pad_all(card, 12, 0);
     lv_obj_set_style_pad_row(card, 4, 0);
-    ui_fixed_num_create(num, card, 194, 104, ui_fonts.value, UI_COL_TEXT, ui_fonts.value, UI_COL_TEXT);
+    ui_fixed_num_create(num, card, 194, 104, decimals, ui_fonts.value, UI_COL_TEXT, ui_fonts.value, UI_COL_TEXT);
 }
 
 static lv_obj_t *icon_button(lv_obj_t *parent, const char *icon, lv_color_t color, lv_event_cb_t cb,
@@ -103,7 +103,8 @@ static void measure_card_create(lv_obj_t *parent, measure_card_t *c, uint8_t ind
     c->state = ui_label(head, ui_fonts.small, UI_COL_MUTED, "");
 
     lv_obj_t *body = plain_row(card);
-    ui_fixed_num_create(&c->value, body, 260, 150, ui_fonts.measure, UI_COL_TEXT, ui_fonts.measure, UI_COL_TEXT);
+    /* room for "-99.999" before the comma and two decimals after it */
+    ui_fixed_num_create(&c->value, body, 260, 168, 2, ui_fonts.measure, UI_COL_TEXT, ui_fonts.measure, UI_COL_TEXT);
     lv_obj_t *btns = plain_row(body);
     lv_obj_set_width(btns, 2 * 72 + 10);   /* two 72 px buttons + gap */
     lv_obj_set_flex_align(btns, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -140,7 +141,7 @@ void ui_ride_create(lv_obj_t *tab)
     lv_obj_set_style_arc_color(s_arc, UI_COL_BORDER, LV_PART_MAIN);
     lv_obj_set_style_arc_color(s_arc, UI_COL_ACCENT, LV_PART_INDICATOR);
 
-    ui_fixed_num_create(&s_speed, speed_box, 448, SPEED_COMMA_X,
+    ui_fixed_num_create(&s_speed, speed_box, 448, SPEED_COMMA_X, 1,
                         ui_fonts.speed, UI_COL_TEXT, ui_fonts.speed_dec, UI_COL_MUTED);
     lv_obj_align(s_speed.box, LV_ALIGN_CENTER, 0, -16);
     s_unit = ui_label(speed_box, ui_fonts.small, UI_COL_MUTED, "km/h");
@@ -150,8 +151,8 @@ void ui_ride_create(lv_obj_t *tab)
     /* Trip and total distance, close to the speedometer */
     lv_obj_t *row = plain_row(tab);
     lv_obj_set_style_margin_top(row, -12, 0);
-    distance_card(row, "Tagesstrecke", &s_trip);
-    distance_card(row, "Gesamt", &s_total);
+    distance_card(row, "Tagesstrecke", &s_trip, 2);
+    distance_card(row, "Gesamt", &s_total, 1);
 
     /* Two independent distance measurements */
     for (uint8_t i = 0; i < UI_MEASURE_COUNT; i++) {

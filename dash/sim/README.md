@@ -32,7 +32,7 @@ User actions (buttons, sliders, lists) are printed to the terminal as
 |---|---|
 | `--zoom <f>` | scales the window (e.g. `0.6`); the GUI keeps its 480×800 layout |
 | `--link-drops` | simulates a lost core link for 2 s every 30 s ("--" display) |
-| `--screenshot <dir>` | headless: no window, writes `ride.bmp`, `led_top.bmp`, `led_bottom.bmp`, `settings.bmp`, `calib_counting.bmp`, `calib_input.bmp`, `settings_after_calib.bmp` |
+| `--screenshot <dir>` | headless: no window, writes `ride.bmp`, `led_top.bmp`, `led_bottom.bmp`, `settings.bmp`, `calib_counting.bmp`, `calib_input.bmp`, `calib_warn.bmp`, `calib_confirm.bmp`, `settings_after_calib.bmp` |
 | `--time <s>` | with `--screenshot`: simulated seconds before the screenshots (default 20) |
 | `--measure` | with `--screenshot`: starts measurement 1 at t = 5 s and measurement 2 at t = 12 s |
 

@@ -45,8 +45,10 @@ lv_obj_t *ui_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, co
 /* Set a label text only if it changed (avoids needless redraws). */
 void ui_set_text(lv_obj_t *label, const char *text);
 
+/* decimals_max: largest number of decimals shown; the unit is placed after
+ * room for that many of the widest digits, so it never moves. */
 void ui_fixed_num_create(ui_fixed_num_t *n, lv_obj_t *parent, int32_t width, int32_t comma_x,
-                         const lv_font_t *int_font, lv_color_t int_color,
+                         int decimals_max, const lv_font_t *int_font, lv_color_t int_color,
                          const lv_font_t *rest_font, lv_color_t rest_color);
 /* text: formatted number such as "1.234,56"; unit (may be NULL) is shown small and grey */
 void ui_fixed_num_set(ui_fixed_num_t *n, const char *text, const char *unit);
