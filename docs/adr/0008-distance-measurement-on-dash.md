@@ -1,7 +1,8 @@
 # ADR 0008: Distance measurement on dash
 
 - Status: Accepted
-- Date: 2026-11-25 (updated 2026-11-25: stopwatch behaviour)
+- Date: 2026-11-25 (updated 2026-11-25: stopwatch behaviour; two measurements,
+  selectable display resolution)
 
 ## Context
 
@@ -30,13 +31,15 @@ Use option 3.
 - core sends the total distance in millimetres as `total_mm` (uint32, wraps at
   2^32 mm ≈ 4295 km) in every status frame. It is derived from the persistent total
   distance, so it survives power loss (with the loss described in ADR 0009).
-- The measurement works like a stopwatch, with three buttons:
+- There are **two independent measurements** (e.g. "lap" and "ride"). Each has
+  its own state and its own buttons.
+- Each measurement works like a stopwatch, with three functions:
   - **Start:** counting starts (or resumes after a stop).
   - **Stop:** the value is frozen. Distance travelled while stopped (e.g. pushing
     the scooter) is not counted.
   - **Reset:** sets the value to 0 (allowed while running or stopped).
-- dash keeps the measurement state and stores it in its own NVS on every button
-  press (and only then):
+- dash keeps the state of each measurement and stores it in its own NVS on every
+  button press (and only then):
 
   | Field | Type | Meaning |
   |---|---|---|
@@ -54,6 +57,9 @@ Use option 3.
 - Plausibility check: if `measured` is implausibly large (e.g. core was replaced or
   its NVS was erased, so `total_mm` jumped backwards), dash resets the measurement
   to 0.
+- **Display resolution** is a dash setting (settings screen, stored in dash NVS):
+  1 m, 10 cm or 1 cm. Values from 100 km on are shown in km with metre
+  resolution. The internal value is always in mm.
 - Optional smoothing: between two frames, dash may extrapolate with the current
   speed for a smoother display. The next frame always overrides the estimate.
 
@@ -65,7 +71,6 @@ Use option 3.
 - Lost frames do not cause errors: every frame carries the absolute value.
 - dash writes to its flash only once per button press (negligible wear).
 - Pushing the scooter or short breaks can be excluded by pressing stop.
-- Several independent measurements (e.g. "lap" and "ride") are possible on dash
-  without protocol changes.
+- Further measurements could be added on dash without protocol changes.
 - At 20 Hz and 4 m/s the raw value advances in 20 cm steps; smoothing or a higher
   frame rate can be added if needed.

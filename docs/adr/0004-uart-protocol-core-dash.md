@@ -43,6 +43,8 @@ sent by core, 0x80–0xFF by dash.
 | 0x03 | PRESET_LIST | on request | `category`, `index`, `count`, then up to 11 entries |
 | 0x04 | PRESET_HEADER | on request (GET_PRESET) | `category`, `slot`, preset header |
 | 0x05 | PRESET_CHUNK | after PRESET_HEADER | `chunk_index` (uint16), data (≤ 240 bytes) |
+| 0x06 | CALIB_STATUS | every 200 ms while a calibration is active, and after stop | `state` (uint8: idle, counting, stopped), `counts` (uint32), distance with current factor (uint32, mm) (ADR 0014) |
+| 0x07 | CALIB_HISTORY | on request and after CALIB_APPLY | current `nm_per_count` (uint32), `count`, then up to 10 entries of 20 bytes (ADR 0014) |
 | 0x7F | ACK | answer to every command | `seq`, `status` (0 = OK, else error code) |
 
 STATUS payload:
@@ -98,6 +100,11 @@ ACK carrying the same `seq`.
 | 0x8A | PRESET_CHUNK | `chunk_index` (uint16), data (≤ 240 bytes) |
 | 0x8B | PRESET_COMMIT | – (core checks CRC32, stores or previews, ACKs) |
 | 0x8C | PRESET_DELETE | category, slot |
+| 0x8D | CALIB_START | – (ADR 0014) |
+| 0x8E | CALIB_STOP | – |
+| 0x8F | CALIB_APPLY | `ref_cm` (uint32), `timestamp` (uint32, Unix time, 0 = unknown) |
+| 0x90 | CALIB_DISCARD | – |
+| 0x91 | GET_CALIB_HISTORY | – |
 
 #### Reliability
 

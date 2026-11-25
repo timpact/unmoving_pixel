@@ -99,6 +99,7 @@ presets/
 | POST | `/api/preview/{category}` | try a preset on the strip without storing it |
 | GET | `/api/export` | all user presets as one JSON bundle |
 | GET | `/api/settings` | current LED settings (ADR 0012) |
+| POST | `/api/time` | device time from the browser, sent automatically when the editor opens (ADR 0014) |
 
 ### JSON formats
 

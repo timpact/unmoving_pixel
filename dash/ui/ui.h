@@ -1,0 +1,113 @@
+/*
+ * dash GUI (ADR 0010).
+ *
+ * Platform-independent: uses only LVGL. The app (ESP-IDF firmware or the PC
+ * simulator) fills a ui_model_t and calls ui_update() periodically; user actions
+ * are reported through the ui_actions_t callbacks.
+ */
+#ifndef UI_H
+#define UI_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "up_overlay.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define UI_MAX_PRESETS     48
+#define UI_PRESET_NAME_LEN 17   /* 16 bytes + terminator */
+
+#define UI_PRESET_PATTERN 0
+#define UI_PRESET_OVERLAY 1
+
+#define UI_OVERLAY_MODIFIED 0xFF  /* active overlay differs from all presets */
+
+#define UI_MEASURE_COUNT 2        /* independent distance measurements (ADR 0008) */
+
+typedef struct {
+    uint8_t slot;
+    bool    builtin;
+    char    name[UI_PRESET_NAME_LEN];
+} ui_preset_entry_t;
+
+typedef struct {
+    uint16_t          rev;     /* changes whenever the list changes */
+    uint8_t           count;
+    ui_preset_entry_t entries[UI_MAX_PRESETS];
+} ui_preset_list_t;
+
+typedef struct {
+    /* Link to core (ADR 0004): false → show "--" */
+    bool link_ok;
+
+    /* Ride values */
+    uint16_t speed_mm_s;        /* smoothed speed for display */
+    uint32_t trip_m;
+    uint32_t total_m;
+    uint16_t battery_mv;        /* 0 = unknown */
+
+    /* Distance measurements (ADR 0008), already computed by the app */
+    uint32_t measure_mm[UI_MEASURE_COUNT];
+    bool     measure_running[UI_MEASURE_COUNT];
+
+    /* dash settings (stored on the dash) */
+    uint8_t display_brightness;   /* 5 … 100 % */
+    uint8_t measure_decimals;     /* resolution of the measurement display in metres:
+                                     0 = 1 m, 1 = 10 cm, 2 = 1 cm */
+
+    /* LED settings (ADR 0012) */
+    uint8_t      global_brightness;   /* 0 … 100 % */
+    up_overlay_t overlay;             /* active overlay */
+    uint8_t      active_pattern;      /* slot */
+    uint8_t      active_overlay;      /* slot or UI_OVERLAY_MODIFIED */
+    uint16_t     strip_length_mm;     /* for the overlay preview */
+
+    ui_preset_list_t patterns;
+    ui_preset_list_t overlays;
+
+    /* Preset editor via Wi-Fi (ADR 0013) */
+    bool editor_on;
+    char wifi_ssid[33];
+    char wifi_password[65];
+    char editor_url[64];
+} ui_model_t;
+
+typedef struct {
+    void *ctx;
+    void (*measure_start)(void *ctx, uint8_t index);
+    void (*measure_stop)(void *ctx, uint8_t index);
+    void (*measure_reset)(void *ctx, uint8_t index);
+    void (*set_display_brightness)(void *ctx, uint8_t percent);
+    void (*set_measure_decimals)(void *ctx, uint8_t decimals);
+    void (*set_brightness)(void *ctx, uint8_t percent);
+    void (*set_overlay)(void *ctx, const up_overlay_t *overlay);
+    void (*select_preset)(void *ctx, uint8_t category, uint8_t slot);
+    void (*set_editor)(void *ctx, bool on);
+} ui_actions_t;
+
+/*
+ * Create the GUI on the default display.
+ * font_data/font_size: TrueType font (Montserrat) used for all text.
+ */
+void ui_init(const ui_actions_t *actions, const void *font_data, size_t font_size);
+
+/* Refresh the widgets from the model. Call from the LVGL thread, e.g. every 50 ms. */
+void ui_update(const ui_model_t *model);
+
+/* For the simulator and screenshots */
+void ui_show_tab(uint32_t index);
+void ui_scroll_led_page(bool to_bottom);
+
+#define UI_TAB_RIDE     0
+#define UI_TAB_LED      1
+#define UI_TAB_SETTINGS 2
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* UI_H */

@@ -1,7 +1,8 @@
 # ADR 0010: dash GUI defined in code, with a PC simulator
 
 - Status: Accepted
-- Date: 2026-11-25
+- Date: 2026-11-25 (updated 2026-11-25: settings screen, code structure and
+  fonts after the first simulator tests)
 
 ## Context
 
@@ -31,9 +32,11 @@ Flashing the P4 for every GUI change is slow. A faster preview is needed.
 
 ```
 dash/
-├── ui/      # GUI: screens, widgets, styles, fonts – LVGL only, no ESP-IDF
+├── ui/      # GUI: screens, widgets, styles, font asset – LVGL only, no ESP-IDF
+├── app/     # platform-independent dash logic (e.g. distance measurement)
 ├── main/    # ESP-IDF app: display + touch drivers, UART link, NVS, Wi-Fi
-└── sim/     # PC simulator: SDL2 window, simulated data source
+└── sim/     # PC simulator: SDL2 window, simulated core, screenshots
+common/include/   # code shared with core (e.g. overlay formula, ADR 0012)
 ```
 
 - `ui/` talks to the rest of the system through a data interface:
@@ -57,14 +60,31 @@ dash/
 - LVGL configuration (`lv_conf.h`, fonts, colour depth) is shared between
   firmware and simulator, so the preview matches the device.
 
+### Display and fonts
+
+- Portrait orientation, 480×800, RGB565.
+- Dark theme for readability at night.
+- One typeface (Montserrat, SIL OFL, `ui/assets/`). Text sizes with icons use the
+  LVGL built-in Montserrat fonts (ASCII and `LV_SYMBOL_*`) with a Tiny TTF fallback
+  of the same size for umlauts; large number sizes are rendered by Tiny TTF from
+  the embedded TTF. No generated font files are needed.
+- Numbers use a **fixed decimal comma**: the integer part is right-aligned to a
+  fixed position, decimals follow; units are smaller and grey on the same
+  baseline. Digits of different width therefore never make the comma jump.
+- The simulator window has a fixed size (resizing would change the display
+  resolution); `--zoom` scales it.
+
 ### Screens
 
-Two screens, switched by swiping or by tabs at the screen edge:
+Three screens, switched by swiping or by tabs (icon above text) at the bottom:
 
 1. **Ride**
-   - Speed (large), trip and total distance
-   - Distance measurement (ADR 0008) with Start, Stop and Reset
-   - Link state: "--" when no valid frame for 500 ms (ADR 0004)
+   - Speed in km/h inside an arc gauge (0 … 16 km/h); the decimal is shown at
+     60 % size in grey so it does not distract
+   - Trip and total distance directly below the gauge
+   - Two distance measurements (ADR 0008), each with start/stop and reset
+   - Link state and battery voltage; "--" when no valid frame for 500 ms
+     (ADR 0004)
 2. **LED**
    - Global brightness slider
    - Pattern list (built-in and user patterns from core, ADR 0011, 0013)
@@ -73,8 +93,14 @@ Two screens, switched by swiping or by tabs at the screen edge:
    - Button to enable the preset editor via Wi-Fi (ADR 0013), showing SSID,
      password and URL as text and QR code
 
-Further screens (settings, diagnostics such as the NVS write counter) can be
-added later without changing this structure.
+3. **Settings**
+   - Display brightness (dash backlight, 5 … 100 %, stored on dash)
+   - Resolution of the distance measurement display (ADR 0008)
+   - Encoder calibration by test ride, with history (ADR 0014)
+   - Date and time (manual entry, ADR 0014)
+
+Further content (e.g. diagnostics such as the NVS write counter) can be added
+without changing this structure.
 
 ## Consequences
 
