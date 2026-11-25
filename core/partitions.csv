@@ -1,0 +1,9 @@
+# core – ESP32-S3, 16 MB flash
+# Name,      Type, SubType,   Offset,   Size
+# NVS: odometer record (ADR 0009). 64 KB = 16 pages for wear spreading.
+nvs,         data, nvs,       0x9000,   64K
+# Application (no OTA: core has no network connection)
+factory,     app,  factory,   0x20000,  4M
+# Scratch area for the flash endurance test (core/test/flash_endurance).
+# Not used by the core firmware.
+flashtest,   data, undefined, ,         1M

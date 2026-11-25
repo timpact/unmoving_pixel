@@ -1,0 +1,15 @@
+# core – ESP32-S3 (N16R8: 16 MB flash, 8 MB octal PSRAM)
+CONFIG_IDF_TARGET="esp32s3"
+
+# 16 MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# PSRAM disabled (ADR 0007): on the boards in use, the first write to the octal
+# PSRAM corrupts the memory bus and the app hangs or crashes at startup.
+# core does not need PSRAM. GPIO 35, 36 and 37 are still wired to the in-package
+# PSRAM – do not use these pins.
+# CONFIG_SPIRAM is not set
+
+# Custom partition table (64 KB NVS, 4 MB app, 1 MB flash test area)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"

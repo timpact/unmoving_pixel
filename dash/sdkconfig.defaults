@@ -1,0 +1,16 @@
+# dash – ESP32-P4 (Guition JC4880P443)
+CONFIG_IDF_TARGET="esp32p4"
+
+# Early chip revisions (v1.x) are likely on this board.
+# Without this, the bootloader refuses to start on revisions < 3.0.
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_0=y
+
+# 16 MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# 32 MB PSRAM (needed later for LVGL frame buffers)
+CONFIG_SPIRAM=y
+
+# The board uses a Boya flash chip (detected at boot)
+CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
