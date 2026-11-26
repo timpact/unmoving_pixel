@@ -13,7 +13,8 @@
 #include "ui.h"
 
 typedef struct {
-    bool link_drops;   /* simulate a lost link for 2 s every 30 s */
+    bool link_drops;      /* simulate a lost link for 2 s every 30 s */
+    bool overlays_full;   /* all user overlay slots taken ("no free slot" notice) */
 } sim_options_t;
 
 void sim_core_init(const sim_options_t *opt);

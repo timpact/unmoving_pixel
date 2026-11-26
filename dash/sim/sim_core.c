@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "measurement.h"
+#include "up_preset.h"
 
 /* calendar helpers from dash/ui (ui.c) */
 uint32_t ui_make_time(int year, int month, int day, int hour, int minute);
@@ -22,6 +23,19 @@ typedef struct {
     const char *name;
     up_overlay_t ov;
 } overlay_preset_t;
+
+/* Overlay slots as on core (mock numbering, see tools/preset-editor/mock-dash.mjs):
+   0 … 7 built-in (read-only), 8 … 15 user */
+#define OV_BUILTIN_SLOTS 8
+#define OV_USER_SLOTS    8
+#define OV_SLOTS         (OV_BUILTIN_SLOTS + OV_USER_SLOTS)
+#define NOTICE_MS        5000u
+
+typedef struct {
+    bool used;
+    char name[UP_PRESET_NAME_BYTES + 1];
+    up_overlay_t ov;
+} overlay_slot_t;
 
 static const overlay_preset_t k_overlays[] = {
     {0, "Ohne", {UP_OVERLAY_TYPE_EDGE_FADE, 100, 100, 100, 0, 0}},
@@ -61,6 +75,10 @@ static struct {
     up_overlay_t overlay;
     uint8_t active_pattern;
     uint8_t active_overlay;
+    overlay_slot_t ovs[OV_SLOTS];
+    uint16_t overlay_list_rev;
+    uint8_t led_notice;
+    uint32_t notice_until_ms;
     bool editor_on;
     /* calibration (ADR 0014) */
     uint8_t calib_state;
@@ -147,9 +165,25 @@ void sim_core_init(const sim_options_t *opt)
     s.brightness = 80;
     s.display_brightness = 70;
     s.measure_decimals = 2;
-    s.overlay = k_overlays[1].ov;
+    for (size_t i = 0; i < sizeof(k_overlays) / sizeof(k_overlays[0]); i++) {
+        overlay_slot_t *o = &s.ovs[k_overlays[i].slot];
+        o->used = true;
+        snprintf(o->name, sizeof(o->name), "%s", k_overlays[i].name);
+        o->ov = k_overlays[i].ov;
+    }
+    if (opt->overlays_full) {   /* all user slots taken: test the "no free slot" notice */
+        for (int slot = OV_BUILTIN_SLOTS; slot < OV_SLOTS; slot++) {
+            if (!s.ovs[slot].used) {
+                s.ovs[slot].used = true;
+                snprintf(s.ovs[slot].name, sizeof(s.ovs[slot].name), "Eigenes %d", slot - OV_BUILTIN_SLOTS + 1);
+                s.ovs[slot].ov = k_overlays[0].ov;
+            }
+        }
+    }
+    s.overlay_list_rev = 1;
     s.active_pattern = 0;
     s.active_overlay = 1;
+    s.overlay = s.ovs[1].ov;
 
     /* calibration: stored factor slightly off, two older entries */
     s.nm_per_count = 26500;
@@ -161,6 +195,9 @@ void sim_core_init(const sim_options_t *opt)
 void sim_core_step(uint32_t dt_ms)
 {
     s.t_ms += dt_ms;
+    if (s.led_notice != UI_LED_NOTICE_NONE && (int32_t)(s.t_ms - s.notice_until_ms) >= 0) {
+        s.led_notice = UI_LED_NOTICE_NONE;
+    }
     s.speed_mm_s = speed_profile(s.t_ms);
     s.pos_mm_f += s.speed_mm_s * dt_ms / 1000.0;
     update_travelled();
@@ -195,6 +232,7 @@ void sim_core_fill_model(ui_model_t *m)
     m->overlay = s.overlay;
     m->active_pattern = s.active_pattern;
     m->active_overlay = s.active_overlay;
+    m->led_notice = s.led_notice;
     m->strip_length_mm = 500;
 
     m->patterns.rev = 1;
@@ -204,12 +242,16 @@ void sim_core_fill_model(ui_model_t *m)
         m->patterns.entries[i].builtin = k_patterns[i].slot < 8;
         snprintf(m->patterns.entries[i].name, UI_PRESET_NAME_LEN, "%s", k_patterns[i].name);
     }
-    m->overlays.rev = 1;
-    m->overlays.count = sizeof(k_overlays) / sizeof(k_overlays[0]);
-    for (int i = 0; i < m->overlays.count; i++) {
-        m->overlays.entries[i].slot = k_overlays[i].slot;
-        m->overlays.entries[i].builtin = k_overlays[i].slot < 8;
-        snprintf(m->overlays.entries[i].name, UI_PRESET_NAME_LEN, "%s", k_overlays[i].name);
+    m->overlays.rev = s.overlay_list_rev;
+    m->overlays.count = 0;
+    for (int slot = 0; slot < OV_SLOTS; slot++) {
+        if (!s.ovs[slot].used) {
+            continue;
+        }
+        ui_preset_entry_t *e = &m->overlays.entries[m->overlays.count++];
+        e->slot = (uint8_t)slot;
+        e->builtin = slot < OV_BUILTIN_SLOTS;
+        snprintf(e->name, UI_PRESET_NAME_LEN, "%s", s.ovs[slot].name);
     }
 
     m->calib_state = s.calib_state;
@@ -284,11 +326,41 @@ static void act_set_brightness(void *ctx, uint8_t percent)
     printf("[action] brightness %u %%\n", percent);
 }
 
+/* SET_OVERLAY (ADR 0004, 0017): core writes into the active preset; a built-in
+   preset is copied to a free user slot first */
 static void act_set_overlay(void *ctx, const up_overlay_t *o)
 {
+    uint8_t slot = s.active_overlay;
+    if (slot < OV_BUILTIN_SLOTS) {
+        int free_slot = -1;
+        const char *names[OV_SLOTS];
+        size_t n = 0;
+        for (int i = 0; i < OV_SLOTS; i++) {
+            if (s.ovs[i].used) {
+                names[n++] = s.ovs[i].name;
+            } else if (i >= OV_BUILTIN_SLOTS && free_slot < 0) {
+                free_slot = i;
+            }
+        }
+        if (free_slot < 0) {
+            /* ACK with "no free slot": values stay those of the built-in preset */
+            s.led_notice = UI_LED_NOTICE_NO_FREE_SLOT;
+            s.notice_until_ms = s.t_ms + NOTICE_MS;
+            printf("[action] overlay: no free user slot\n");
+            return;
+        }
+        overlay_slot_t *copy = &s.ovs[free_slot];
+        up_preset_copy_name(s.ovs[slot].name, names, n, copy->name);
+        copy->used = true;
+        slot = (uint8_t)free_slot;
+        s.active_overlay = slot;
+        s.overlay_list_rev++;
+        printf("[action] overlay: built-in copied to slot %u (%s)\n", slot, copy->name);
+    }
+    s.ovs[slot].ov = *o;
     s.overlay = *o;
-    s.active_overlay = UI_OVERLAY_MODIFIED;
-    printf("[action] overlay %u/%u/%u %% fades %u/%u mm\n",
+    s.led_notice = UI_LED_NOTICE_NONE;
+    printf("[action] overlay slot %u: %u/%u/%u %% fades %u/%u mm\n", slot,
            o->level_start, o->level_mid, o->level_end, o->fade_start_mm, o->fade_end_mm);
 }
 
@@ -299,12 +371,11 @@ static void act_select_preset(void *ctx, uint8_t category, uint8_t slot)
         printf("[action] pattern slot %u\n", slot);
         return;
     }
-    for (size_t i = 0; i < sizeof(k_overlays) / sizeof(k_overlays[0]); i++) {
-        if (k_overlays[i].slot == slot) {
-            s.overlay = k_overlays[i].ov;
-            s.active_overlay = slot;
-            printf("[action] overlay preset slot %u (%s)\n", slot, k_overlays[i].name);
-        }
+    if (slot < OV_SLOTS && s.ovs[slot].used) {
+        s.overlay = s.ovs[slot].ov;
+        s.active_overlay = slot;
+        s.led_notice = UI_LED_NOTICE_NONE;
+        printf("[action] overlay preset slot %u (%s)\n", slot, s.ovs[slot].name);
     }
 }
 

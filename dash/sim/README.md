@@ -32,6 +32,7 @@ User actions (buttons, sliders, lists) are printed to the terminal as
 |---|---|
 | `--zoom <f>` | scales the window (e.g. `0.6`); the GUI keeps its 480×800 layout |
 | `--link-drops` | simulates a lost core link for 2 s every 30 s ("--" display) |
+| `--overlays-full` | all user overlay slots taken: moving an overlay slider on a built-in overlay shows "Kein freier Platz" |
 | `--screenshot <dir>` | headless: no window, writes PNG screenshots of a simulated ride (ride, LED, settings, calibration steps) |
 | `--time <s>` | with `--screenshot`: simulated seconds before the screenshots (default 20) |
 | `--measure` | with `--screenshot`: starts measurement 1 at t = 5 s and measurement 2 at t = 12 s |

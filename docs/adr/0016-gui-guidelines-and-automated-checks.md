@@ -59,7 +59,8 @@ The scenario list covers all screens and states, at least:
 - Ride: normal ride, link lost, backward travel, negative measurement, maximum
   values (e.g. measurement 99.999,99 m, speed above the 16 km/h arc range),
   both measurements running and stopped
-- LED: top and bottom of the page, editor on, overlay "Angepasst"
+- LED: top and bottom of the page, editor on, user overlay active, built-in
+  overlay with "no free slot" notice (ADR 0017)
 - Settings: default, after calibration, empty history, full history (10 entries)
 - Calibration dialog: counting, empty input, too short, negative net distance,
   valid result, warning, confirmation step

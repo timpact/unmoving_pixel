@@ -4,6 +4,8 @@
  *   dash_sim                          window 480×800, mouse = touch
  *   dash_sim --zoom <f>               scale the window (e.g. 0.6), layout stays 480×800
  *   dash_sim --link-drops             simulate a lost core link (2 s every 30 s)
+ *   dash_sim --overlays-full          all user overlay slots taken: changing a built-in
+ *                                     overlay shows the "no free slot" notice
  *   dash_sim --screenshot <dir>       headless: run the simulation and write
  *            [--time <s>]             screenshots (PNG) of all screens
  *            [--measure]              start the distance measurements at t = 5 s / 12 s
@@ -156,8 +158,10 @@ int main(int argc, char **argv)
             update_refs = true;
         } else if (strcmp(argv[i], "--link-drops") == 0) {
             opt.link_drops = true;
+        } else if (strcmp(argv[i], "--overlays-full") == 0) {
+            opt.overlays_full = true;
         } else {
-            fprintf(stderr, "usage: %s [--zoom <f>] [--link-drops] [--screenshot <dir> [--time <s>] [--measure]]\n"
+            fprintf(stderr, "usage: %s [--zoom <f>] [--link-drops] [--overlays-full] [--screenshot <dir> [--time <s>] [--measure]]\n"
                             "       %s --check [--update-references]\n", argv[0], argv[0]);
             return 2;
         }

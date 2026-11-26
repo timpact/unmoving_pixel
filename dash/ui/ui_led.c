@@ -20,6 +20,7 @@ static lv_obj_t *s_brightness;
 static lv_obj_t *s_brightness_val;
 static lv_obj_t *s_pattern_dd;
 static lv_obj_t *s_overlay_dd;
+static lv_obj_t *s_overlay_hint;
 static lv_obj_t *s_chart;
 static lv_chart_series_t *s_series;
 static lv_obj_t *s_ov_slider[OV_COUNT];
@@ -36,6 +37,7 @@ static uint8_t s_pattern_slots[UI_MAX_PRESETS];
 static uint8_t s_overlay_slots[UI_MAX_PRESETS];
 static uint8_t s_pattern_count;
 static uint8_t s_overlay_count;
+static bool s_overlay_builtin[UI_MAX_PRESETS];
 static up_overlay_t s_overlay;
 static bool s_overlay_valid;
 static uint16_t s_strip_mm = 500;
@@ -152,7 +154,6 @@ static void overlay_slider_cb(lv_event_t *e)
 
     update_overlay_labels();
     update_chart();
-    lv_dropdown_set_text(s_overlay_dd, "Angepasst");
 
     if (ui_actions.set_overlay) {
         ui_actions.set_overlay(ui_actions.ctx, &s_overlay);
@@ -170,7 +171,6 @@ static void pattern_dd_cb(lv_event_t *e)
 static void overlay_dd_cb(lv_event_t *e)
 {
     uint32_t i = lv_dropdown_get_selected(lv_event_get_target(e));
-    lv_dropdown_set_text(s_overlay_dd, NULL);
     if (i < s_overlay_count && ui_actions.select_preset) {
         ui_actions.select_preset(ui_actions.ctx, UI_PRESET_OVERLAY, s_overlay_slots[i]);
     }
@@ -255,6 +255,10 @@ void ui_led_create(lv_obj_t *tab)
     /* Overlay */
     card = ui_card(tab, "Overlay");
     s_overlay_dd = dropdown(card, overlay_dd_cb);
+    s_overlay_hint = ui_label(card, ui_fonts.small, UI_COL_MUTED, "");
+    lv_obj_set_width(s_overlay_hint, lv_pct(100));
+    lv_label_set_long_mode(s_overlay_hint, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(s_overlay_hint, UI_FLAG_WRAP_ALLOWED);
 
     s_chart = lv_chart_create(card);
     lv_obj_set_size(s_chart, lv_pct(100), 110);
@@ -320,6 +324,9 @@ void ui_led_update(const ui_model_t *m)
     if (m->overlays.rev != s_overlay_rev) {
         s_overlay_rev = m->overlays.rev;
         build_options(&m->overlays, s_overlay_slots, &s_overlay_count, s_overlay_dd);
+        for (int i = 0; i < s_overlay_count; i++) {
+            s_overlay_builtin[i] = m->overlays.entries[i].builtin;
+        }
     }
     if (!lv_dropdown_is_open(s_pattern_dd)) {
         int i = index_of_slot(s_pattern_slots, s_pattern_count, m->active_pattern);
@@ -346,16 +353,22 @@ void ui_led_update(const ui_model_t *m)
         update_overlay_labels();
         update_chart();
     }
-    if (!dragging && !lv_dropdown_is_open(s_overlay_dd)) {
-        int i = index_of_slot(s_overlay_slots, s_overlay_count, m->active_overlay);
-        if (m->active_overlay == UI_OVERLAY_MODIFIED || i < 0) {
-            lv_dropdown_set_text(s_overlay_dd, "Angepasst");
-        } else {
-            lv_dropdown_set_text(s_overlay_dd, NULL);
-            if ((int)lv_dropdown_get_selected(s_overlay_dd) != i) {
-                lv_dropdown_set_selected(s_overlay_dd, i);
-            }
-        }
+    int ov = index_of_slot(s_overlay_slots, s_overlay_count, m->active_overlay);
+    if (!lv_dropdown_is_open(s_overlay_dd) && ov >= 0 && (int)lv_dropdown_get_selected(s_overlay_dd) != ov) {
+        lv_dropdown_set_selected(s_overlay_dd, ov);
+    }
+
+    /* Hint below the overlay list: the sliders change the preset itself (ADR 0017) */
+    if (m->led_notice == UI_LED_NOTICE_NO_FREE_SLOT) {
+        ui_set_text(s_overlay_hint, "Kein freier Platz – im Editor ein Overlay löschen");
+        lv_obj_set_style_text_color(s_overlay_hint, UI_COL_WARN, 0);
+        lv_obj_remove_flag(s_overlay_hint, LV_OBJ_FLAG_HIDDEN);
+    } else if (ov >= 0 && s_overlay_builtin[ov]) {
+        ui_set_text(s_overlay_hint, "Eingebaut – Regler legen eine Kopie an");
+        lv_obj_set_style_text_color(s_overlay_hint, UI_COL_MUTED, 0);
+        lv_obj_remove_flag(s_overlay_hint, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_overlay_hint, LV_OBJ_FLAG_HIDDEN);
     }
 
     /* Editor */

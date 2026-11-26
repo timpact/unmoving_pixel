@@ -153,7 +153,11 @@ test('copy name: "<name> (2)", next free number, 16 bytes', () => {
     assert.equal(copyName('Spotlight', ['Spotlight', 'Spotlight (2)']), 'Spotlight (3)');
     assert.equal(copyName('Spotlight (2)', ['Spotlight (2)']), 'Spotlight (3)', 'suffix replaced');
     assert.equal(copyName('Weiche Ränder', []), 'Weiche Ränd (2)');
-    assert.ok(utf8Length(copyName('ääääääääääää', [])) <= 16);
+    assert.equal(copyName('ääääääääääää', []), 'ääääää (2)', 'no cut inside ä');
+    assert.equal(copyName('Ohne', []), 'Ohne (2)');
+    assert.equal(copyName('Test (x)', []), 'Test (x) (2)', 'not a number suffix');
+    assert.equal(copyName('1234567890123456', []), '123456789012 (2)');
+    /* same cases in common/test/test_preset.c (C version for core and dash) */
 });
 
 test('bundle and file names', () => {

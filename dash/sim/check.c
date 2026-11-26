@@ -348,6 +348,13 @@ static bool in_tab_bar(lv_obj_t *o)
     return tv != NULL && is_type(tv, &lv_tabview_class) && bar == lv_tabview_get_tab_bar(tv);
 }
 
+static bool clipped(lv_obj_t *o, const lv_area_t *vis)
+{
+    lv_area_t full;
+    lv_obj_get_coords(o, &full);
+    return vis->x1 != full.x1 || vis->y1 != full.y1 || vis->x2 != full.x2 || vis->y2 != full.y2;
+}
+
 static void check_targets(void)
 {
     s_target_count = 0;
@@ -374,6 +381,9 @@ static void check_targets(void)
             }
             lv_area_t ra, rb;
             if (!visible_area(a, &ra) || !visible_area(b, &rb)) continue;
+            /* a target cut off at the edge of a scrolled page touches whatever lies
+               beyond that edge (e.g. the tab bar); it is checked when scrolled into view */
+            if (clipped(a, &ra) || clipped(b, &rb)) continue;
             int32_t dx = LV_MAX(ra.x1 - rb.x2, rb.x1 - ra.x2) - 1;
             int32_t dy = LV_MAX(ra.y1 - rb.y2, rb.y1 - ra.y2) - 1;
             int32_t gap = LV_MAX(dx, dy);
@@ -715,9 +725,15 @@ static void scenarios(void)
     base_model();
     show(UI_TAB_LED, false);
     run_scenario("led_top");
-    s_m.active_overlay = UI_OVERLAY_MODIFIED;
+    /* user overlay active: no hint */
+    s_m.active_overlay = 8;
     s_m.overlay.level_start = 35;
-    run_scenario("led_overlay_modified");
+    run_scenario("led_overlay_user");
+    /* built-in overlay, no free user slot (ADR 0017) */
+    base_model();
+    s_m.led_notice = UI_LED_NOTICE_NO_FREE_SLOT;
+    show(UI_TAB_LED, false);
+    run_scenario("led_overlay_no_free_slot");
     base_model();
     s_m.editor_on = true;
     apply();

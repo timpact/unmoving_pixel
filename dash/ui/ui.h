@@ -24,7 +24,9 @@ extern "C" {
 #define UI_PRESET_PATTERN 0
 #define UI_PRESET_OVERLAY 1
 
-#define UI_OVERLAY_MODIFIED 0xFF  /* active overlay differs from all presets */
+/* Notices on the LED screen, set and cleared by the app (ADR 0012, 0017) */
+#define UI_LED_NOTICE_NONE         0
+#define UI_LED_NOTICE_NO_FREE_SLOT 1   /* built-in overlay changed, but no user slot free */
 
 #define UI_MEASURE_COUNT 2        /* independent distance measurements (ADR 0008) */
 
@@ -91,7 +93,9 @@ typedef struct {
     uint8_t      global_brightness;   /* 0 … 100 % */
     up_overlay_t overlay;             /* active overlay */
     uint8_t      active_pattern;      /* slot */
-    uint8_t      active_overlay;      /* slot or UI_OVERLAY_MODIFIED */
+    uint8_t      active_overlay;      /* slot; slider changes are written into this
+                                         preset, a built-in one is copied first (ADR 0017) */
+    uint8_t      led_notice;          /* UI_LED_NOTICE_* */
     uint16_t     strip_length_mm;     /* for the overlay preview */
 
     ui_preset_list_t patterns;
@@ -113,6 +117,8 @@ typedef struct {
     void (*set_measure_decimals)(void *ctx, uint8_t decimals);
     void (*set_measure_add_backward)(void *ctx, bool add);
     void (*set_brightness)(void *ctx, uint8_t percent);
+    /* writes the values into the active overlay preset; for a built-in preset the
+       app creates a user copy "<name> (2)" first (ADR 0017) */
     void (*set_overlay)(void *ctx, const up_overlay_t *overlay);
     void (*select_preset)(void *ctx, uint8_t category, uint8_t slot);
     void (*set_editor)(void *ctx, bool on);
