@@ -174,8 +174,10 @@ browser ──HTTP──► dash ──UART (ADR 0004)──► core ──► c
 - More work on the dash: ESP-Hosted, access point, HTTP server, web app,
   JSON validation, transfer over UART.
 - The C6 must run an ESP-Hosted firmware version compatible with the ESP-IDF
-  version on the P4. It may have to be updated once (via the P4, or via the C6
-  UART0 pins, see ADR 0006).
+  version on the P4. Done 2026-11-26: the factory firmware 2.3.2 was updated by
+  OTA from the P4 to 2.13.1, the version used on the host
+  (`dash/test/c6_check`, ADR 0019). Recovery if an update fails: the C6 UART0
+  pins (ADR 0006). Host and C6 versions are changed together only.
 - Extra current draw while Wi-Fi is on (on demand only).
 - A dash flash partition for the web app is needed (e.g. 1–2 MB); the dash
   partition table has to be defined.

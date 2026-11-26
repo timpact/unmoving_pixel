@@ -31,7 +31,7 @@ orientation, touch points exactly under the finger.
 | Touch | GT911 at I2C address 0x5D; I2C SDA GPIO7, SCL GPIO8, 400 kHz; reset GPIO3; polled (interrupt line not used) |
 | Other I2C devices | 0x14, 0x18 (probably the audio codec; not used) |
 | UART to core | UART1, GPIO33 RX, GPIO31 TX (ADR 0006) |
-| Wi-Fi co-processor | ESP32-C6 over SDIO: CLK 18, CMD 19, D0–D3 14–17, reset 54 (from the ESPHome configurations, not yet verified; ADR 0013) |
+| Wi-Fi co-processor | ESP32-C6 over SDIO 4-bit, 40 MHz: CLK 18, CMD 19, D0–D3 14–17, reset 54 (verified 2026-11-26 with `dash/test/c6_check`). Factory firmware ESP-Hosted 2.3.2, updated 2026-11-26 by OTA from the P4 to **2.13.1** (same version on host and C6; host: `espressif/esp_hosted` ~2.13.1 with `espressif/esp_wifi_remote` 1.6.3, the last version that excludes ESP-Hosted 3.x; ADR 0013) |
 
 The board support uses only ESP-IDF drivers (no BSP or panel components) and
 lives in `dash/main/board.c`.
