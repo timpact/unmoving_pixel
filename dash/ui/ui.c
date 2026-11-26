@@ -188,9 +188,29 @@ void ui_fmt_fixed(char *buf, size_t len, int64_t value, int decimals)
     digits[o] = '\0';
 
     if (decimals > 0) {
-        snprintf(buf, len, "%s%s,%0*llu", neg ? "-" : "", digits, decimals, (unsigned long long)fp);
+        /* decimals with leading zeros, e.g. fp = 5, decimals = 2 → "05" */
+        char frac[24];
+        int d = decimals < (int)sizeof(frac) - 1 ? decimals : (int)sizeof(frac) - 1;
+        frac[d] = '\0';
+        for (int i = d - 1; i >= 0; i--) {
+            frac[i] = (char)('0' + fp % 10);
+            fp /= 10;
+        }
+        snprintf(buf, len, "%s%s,%s", neg ? "-" : "", digits, frac);
     } else {
         snprintf(buf, len, "%s%s", neg ? "-" : "", digits);
+    }
+}
+
+/* I5: LVGL 9.3 limits non-elastic scrolling only at the top end; at the bottom
+ * end (elastic_diff, wrong sign for negative steps) the page runs one finger step
+ * beyond it and springs back on release. Pull it back at once. */
+static void hard_stop_bottom_cb(lv_event_t *e)
+{
+    lv_obj_t *page = lv_event_get_target(e);
+    int32_t beyond = lv_obj_get_scroll_bottom(page);
+    if (beyond < 0) {
+        lv_obj_scroll_by(page, 0, -beyond, LV_ANIM_OFF);
     }
 }
 
@@ -240,7 +260,11 @@ void ui_init(const ui_actions_t *actions, const void *font_data, size_t font_siz
         lv_obj_set_style_pad_all(tabs[i], 16, 0);
         lv_obj_set_style_pad_row(tabs[i], 12, 0);
         lv_obj_set_flex_flow(tabs[i], LV_FLEX_FLOW_COLUMN);
+        /* I5: hard stop at the page ends, the page follows the finger 1:1 */
+        lv_obj_remove_flag(tabs[i], LV_OBJ_FLAG_SCROLL_ELASTIC);
+        lv_obj_add_event_cb(tabs[i], hard_stop_bottom_cb, LV_EVENT_SCROLL, NULL);
     }
+    lv_obj_remove_flag(lv_tabview_get_content(s_tabview), LV_OBJ_FLAG_SCROLL_ELASTIC);
 
     ui_ride_create(tabs[UI_TAB_RIDE]);
     ui_led_create(tabs[UI_TAB_LED]);
@@ -281,4 +305,30 @@ void ui_scroll_page_y(int32_t y)
     lv_obj_t *tab = s_tabs[lv_tabview_get_tab_active(s_tabview)];
     lv_obj_update_layout(tab);
     lv_obj_scroll_to_y(tab, y, LV_ANIM_OFF);
+}
+
+void ui_set_hidden(lv_obj_t *obj, bool hidden)
+{
+    if (lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) == hidden) {
+        return;
+    }
+    if (hidden) {
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void ui_set_text_color(lv_obj_t *obj, lv_color_t color)
+{
+    if (!lv_color_eq(lv_obj_get_style_text_color(obj, LV_PART_MAIN), color)) {
+        lv_obj_set_style_text_color(obj, color, 0);
+    }
+}
+
+void ui_set_bg_color(lv_obj_t *obj, lv_color_t color)
+{
+    if (!lv_color_eq(lv_obj_get_style_bg_color(obj, LV_PART_MAIN), color)) {
+        lv_obj_set_style_bg_color(obj, color, 0);
+    }
 }

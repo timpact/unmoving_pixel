@@ -13,10 +13,26 @@
 /* 480×800 MIPI-DSI panel, RGB565 */
 #define LV_COLOR_DEPTH 16
 
-/* Memory: LVGL's own allocator. On the device this pool is placed in PSRAM
- * by the port; the simulator just uses a static array. */
-#define LV_USE_STDLIB_MALLOC LV_STDLIB_BUILTIN
-#define LV_MEM_SIZE (1024 * 1024U)
+/* Memory: the simulator uses LVGL's own allocator with a static pool; on the
+ * device LVGL uses malloc(), which puts large blocks into PSRAM (ADR 0019). */
+#if defined(UP_SIM) && UP_SIM
+    #define LV_USE_STDLIB_MALLOC LV_STDLIB_BUILTIN
+    #define LV_MEM_SIZE (1024 * 1024U)
+    #define LV_USE_OS LV_OS_NONE
+#else
+    #define LV_USE_STDLIB_MALLOC LV_STDLIB_CLIB
+    /* Render on both cores of the P4: two software draw units in their own
+     * threads (the GUI task itself is the only caller of the LVGL API) */
+    #define LV_USE_OS LV_OS_FREERTOS
+    #define LV_DRAW_SW_DRAW_UNIT_CNT 2
+    #include "sdkconfig.h"
+    #if CONFIG_DASH_BENCH_SCROLL || CONFIG_DASH_PERF_LOG   /* frame statistics in the log */
+        #define LV_USE_SYSMON 1
+        #define LV_USE_PERF_MONITOR 1
+        #define LV_USE_PERF_MONITOR_LOG_MODE 1
+        #define LV_SYSMON_GET_IDLE lv_os_get_idle_percent
+    #endif
+#endif
 
 #define LV_DEF_REFR_PERIOD 16   /* ms, ~60 Hz */
 #define LV_DPI_DEF 200

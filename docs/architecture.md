@@ -147,6 +147,7 @@ See [`adr/`](adr/).
 | [0016](adr/0016-gui-guidelines-and-automated-checks.md) | GUI guidelines and automated GUI checks | Accepted |
 | [0017](adr/0017-preset-editor-functions.md) | Preset editor – functions and interaction | Accepted |
 | [0018](adr/0018-two-strips-with-end-lights.md) | Two LED strips with end lights | Accepted |
+| [0019](adr/0019-dash-firmware-structure-and-board-support.md) | dash firmware – board support and structure | Accepted |
 
 ## Open points
 

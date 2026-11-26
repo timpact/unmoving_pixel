@@ -77,6 +77,9 @@ static lv_obj_t *row(lv_obj_t *parent)
 {
     lv_obj_t *r = lv_obj_create(parent);
     lv_obj_remove_style_all(r);
+    /* a layout row must not scroll itself: it would swallow vertical swipes
+       (slider knobs overhang the row) instead of passing them to the page (I4) */
+    lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(r, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(r, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

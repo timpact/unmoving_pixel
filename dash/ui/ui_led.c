@@ -190,6 +190,9 @@ static lv_obj_t *row(lv_obj_t *parent)
 {
     lv_obj_t *r = lv_obj_create(parent);
     lv_obj_remove_style_all(r);
+    /* a layout row must not scroll itself: it would swallow vertical swipes
+       (slider knobs overhang the row) instead of passing them to the page (I4) */
+    lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(r, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(r, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -361,14 +364,14 @@ void ui_led_update(const ui_model_t *m)
     /* Hint below the overlay list: the sliders change the preset itself (ADR 0017) */
     if (m->led_notice == UI_LED_NOTICE_NO_FREE_SLOT) {
         ui_set_text(s_overlay_hint, "Kein freier Platz – im Editor ein Overlay löschen");
-        lv_obj_set_style_text_color(s_overlay_hint, UI_COL_WARN, 0);
-        lv_obj_remove_flag(s_overlay_hint, LV_OBJ_FLAG_HIDDEN);
+        ui_set_text_color(s_overlay_hint, UI_COL_WARN);
+        ui_set_hidden(s_overlay_hint, false);
     } else if (ov >= 0 && s_overlay_builtin[ov]) {
         ui_set_text(s_overlay_hint, "Eingebaut – Regler legen eine Kopie an");
-        lv_obj_set_style_text_color(s_overlay_hint, UI_COL_MUTED, 0);
-        lv_obj_remove_flag(s_overlay_hint, LV_OBJ_FLAG_HIDDEN);
+        ui_set_text_color(s_overlay_hint, UI_COL_MUTED);
+        ui_set_hidden(s_overlay_hint, false);
     } else {
-        lv_obj_add_flag(s_overlay_hint, LV_OBJ_FLAG_HIDDEN);
+        ui_set_hidden(s_overlay_hint, true);
     }
 
     /* Editor */
@@ -379,8 +382,8 @@ void ui_led_update(const ui_model_t *m)
             lv_obj_remove_state(s_editor_sw, LV_STATE_CHECKED);
         }
     }
+    ui_set_hidden(s_editor_panel, !m->editor_on);
     if (m->editor_on) {
-        lv_obj_remove_flag(s_editor_panel, LV_OBJ_FLAG_HIDDEN);
         char qr[128];
         lv_snprintf(qr, sizeof(qr), "WIFI:T:WPA;S:%s;P:%s;;", m->wifi_ssid, m->wifi_password);
         if (strcmp(qr, s_qr_data) != 0) {
@@ -390,8 +393,6 @@ void ui_led_update(const ui_model_t *m)
         lv_snprintf(buf, sizeof(buf), "Netz:\n%s\n\nPasswort:\n%s\n\nAdresse:\n%s",
                     m->wifi_ssid, m->wifi_password, m->editor_url);
         ui_set_text(s_wifi_text, buf);
-    } else {
-        lv_obj_add_flag(s_editor_panel, LV_OBJ_FLAG_HIDDEN);
     }
 }
 

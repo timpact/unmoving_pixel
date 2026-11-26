@@ -1,6 +1,7 @@
 /* Simulated core for the dash simulator (see sim_core.h). */
 #include "sim_core.h"
 
+#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -419,7 +420,7 @@ static void act_calib_start(void *ctx)
 static void act_calib_stop(void *ctx)
 {
     s.calib_state = UI_CALIB_STOPPED;
-    printf("[action] calibration stop: %d net counts\n", s.calib_counts);
+    printf("[action] calibration stop: %" PRId32 " net counts\n", s.calib_counts);
 }
 
 static void act_calib_apply(void *ctx, uint32_t ref_cm)
@@ -437,7 +438,8 @@ static void act_calib_apply(void *ctx, uint32_t ref_cm)
     }
     s.nm_per_count = nm;
     s.calib_state = UI_CALIB_IDLE;
-    printf("[action] calibration apply: %u cm / %d counts -> %u nm per count\n", ref_cm, s.calib_counts, nm);
+    printf("[action] calibration apply: %" PRIu32 " cm / %" PRId32 " counts -> %" PRIu32 " nm per count\n", ref_cm,
+           s.calib_counts, nm);
 }
 
 static void act_calib_discard(void *ctx)

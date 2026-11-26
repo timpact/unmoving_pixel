@@ -11,6 +11,24 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
 # 32 MB PSRAM (needed later for LVGL frame buffers)
 CONFIG_SPIRAM=y
+CONFIG_SPIRAM_SPEED_200M=y
 
 # The board uses a Boya flash chip (detected at boot)
 CONFIG_SPI_FLASH_SUPPORT_BOYA_CHIP=y
+
+# LVGL (ADR 0019): use dash/ui/lv_conf.h instead of Kconfig
+CONFIG_LV_CONF_SKIP=n
+
+# GUI performance (ADR 0019): code and constants (fonts) run from PSRAM instead
+# of the 40 MHz flash – rendering 38 → 21 ms per frame
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+
+# Interim partition table with a 1.5 MB app until the dash table is defined
+# (open point, together with the web editor files, ADR 0013)
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# Larger L2 cache with 128-byte lines for PSRAM code and frame buffers (ADR 0019)
+CONFIG_CACHE_L2_CACHE_256KB=y
+CONFIG_CACHE_L2_CACHE_LINE_128B=y

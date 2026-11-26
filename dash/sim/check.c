@@ -7,6 +7,9 @@
  *   T2/L6     text fits: no unexpected wrapping, no clipping, no overlapping text
  *   L3        ride screen fits without scrolling
  *   I1–I3     touch target size and spacing
+ *   I4        vertical swipes scroll the page, also when they start on a slider
+ *   I5        hard stop at the page ends (no elastic overscroll)
+ *   P1        an unchanged model causes no redraw
  *   C1        colour tokens
  *   REF       pixel comparison with approved reference screenshots
  */
@@ -701,6 +704,188 @@ static void layout_sweep(void)
 
 /* ---- main ----------------------------------------------------------------------- */
 
+/* ---- I4: vertical swipes scroll the page, also when they start on a slider ---------- */
+
+static lv_point_t s_tp;
+static bool s_tp_down;
+
+static void fake_touch_read(lv_indev_t *indev, lv_indev_data_t *data)
+{
+    (void)indev;
+    data->point = s_tp;
+    data->state = s_tp_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
+
+static void swipe(int32_t x, int32_t y, int32_t dy)
+{
+    s_tp = (lv_point_t){x, y};
+    s_tp_down = true;
+    headless_run(30);
+    for (int i = 1; i <= 20; i++) {   /* like a finger: dy in 200 ms */
+        s_tp.y = y + dy * i / 20;
+        headless_run(10);
+    }
+    s_tp_down = false;
+    headless_run(600);                /* let the scroll throw settle */
+}
+
+/* I5: drag beyond an end of the page; it must not move past it while the finger
+ * is down nor afterwards (dy < 0: beyond the bottom end) */
+static void check_hard_stop(uint32_t tab_index, const char *name, bool bottom)
+{
+    s_scenario = name;
+    lv_obj_t *tab = ui_get_tab(tab_index);
+    lv_obj_scroll_to_y(tab, bottom ? LV_COORD_MAX : 0, LV_ANIM_OFF);
+    lv_obj_update_layout(tab);
+    int32_t y_end = lv_obj_get_scroll_y(tab);
+    int32_t x = 470, y = bottom ? 600 : 200, dy = bottom ? -300 : 300;
+    int32_t worst = 0;
+    s_tp = (lv_point_t){x, y};
+    s_tp_down = true;
+    headless_run(30);
+    for (int i = 1; i <= 30; i++) {
+        s_tp.y = y + dy * i / 30;
+        headless_run(10);
+        int32_t over = LV_ABS(lv_obj_get_scroll_y(tab) - y_end);
+        if (over > worst) worst = over;
+    }
+    s_tp_down = false;
+    headless_run(600);
+    s_checks++;
+    if (worst > 1) {
+        fail("I5", "page runs %d px beyond its %s end while dragging", (int)worst, bottom ? "bottom" : "top");
+    }
+}
+
+static lv_obj_t *s_sliders[16];
+static int s_slider_count;
+
+static void collect_slider(lv_obj_t *o, void *ctx)
+{
+    (void)ctx;
+    lv_area_t va, full;
+    if (is_type(o, &lv_slider_class) && visible_area(o, &va) && s_slider_count < 16) {
+        lv_obj_get_coords(o, &full);
+        if (va.y1 == full.y1 && va.y2 == full.y2 && full.y1 > 150 && full.y2 < 650) {
+            s_sliders[s_slider_count++] = o;
+        }
+    }
+}
+
+static void check_swipes(uint32_t tab_index, const char *name)
+{
+    s_scenario = name;
+    lv_obj_t *tab = ui_get_tab(tab_index);
+    s_checks++;
+    if (lv_obj_has_flag(tab, LV_OBJ_FLAG_SCROLL_ELASTIC)) {
+        fail("I5", "page scrolls elastically beyond its ends");
+    }
+    s_slider_count = 0;
+    walk(active_root(), collect_slider, NULL);
+    for (int i = 0; i < s_slider_count; i++) {
+        lv_obj_t *sl = s_sliders[i];
+        lv_area_t c;
+        lv_obj_get_coords(sl, &c);
+        int32_t y0 = lv_obj_get_scroll_y(tab);
+        int32_t v0 = lv_slider_get_value(sl);
+        /* swipe in the direction with more room to scroll */
+        int32_t room_down = lv_obj_get_scroll_bottom(tab);
+        int32_t room_up = lv_obj_get_scroll_top(tab);
+        int32_t dy = room_down >= room_up ? -250 : 250;
+        int32_t room = room_down >= room_up ? room_down : room_up;
+        if (room < 20) {
+            continue;   /* page fits, nothing to scroll */
+        }
+        int32_t need = room < 100 ? room * 8 / 10 : 80;
+        swipe((c.x1 + c.x2) / 2 + 30, (c.y1 + c.y2) / 2, dy);
+        int32_t moved = lv_obj_get_scroll_y(tab) - y0;
+        s_checks++;
+        if ((dy < 0 && moved < need) || (dy > 0 && moved > -need)) {
+            fail("I4", "vertical swipe starting on %s does not scroll the page (moved %d px)", ident(sl), (int)moved);
+        }
+        s_checks++;
+        if (lv_slider_get_value(sl) != v0) {
+            fail("I4", "vertical swipe changed %s from %d to %d", ident(sl), (int)v0, (int)lv_slider_get_value(sl));
+        }
+        lv_obj_scroll_to_y(tab, y0, LV_ANIM_OFF);
+        lv_slider_set_value(sl, v0, LV_ANIM_OFF);
+        lv_obj_update_layout(tab);
+    }
+}
+
+/* ---- P1: an unchanged model causes no redraw (cost while scrolling, ADR 0019) ---- */
+
+static int s_invalidations;
+
+static void count_invalidate(lv_event_t *e)
+{
+    (void)e;
+    s_invalidations++;
+}
+
+static void check_idle(uint32_t tab_index, const char *name)
+{
+    s_scenario = name;
+    show(tab_index, false);
+    apply();
+    headless_run(500);   /* animations and transitions settle */
+    lv_display_t *d = lv_display_get_default();
+    s_invalidations = 0;
+    lv_display_add_event_cb(d, count_invalidate, LV_EVENT_INVALIDATE_AREA, NULL);
+    for (int i = 0; i < 10; i++) {   /* 10 model updates with the same values */
+        ui_update(&s_m);
+        headless_run(50);
+    }
+    lv_display_remove_event_cb_with_user_data(d, count_invalidate, NULL);
+    s_checks++;
+    if (s_invalidations > 0) {
+        fail("P1", "unchanged model redraws the screen (%d invalidations in 10 updates)", s_invalidations);
+    }
+}
+
+static void idle_checks(void)
+{
+    base_model();
+    s_m.speed_mm_s = 0;
+    check_idle(UI_TAB_RIDE, "idle_ride_measure");
+    s_m.ride_panel = UI_RIDE_PANEL_LIGHTS;
+    check_idle(UI_TAB_RIDE, "idle_ride_lights");
+    s_m.lights = UP_SIGNAL_HAZARD | UP_LIGHTS_BRAKE_ON;   /* blink phase off: steady */
+    check_idle(UI_TAB_RIDE, "idle_ride_hazard");
+    base_model();
+    check_idle(UI_TAB_LED, "idle_led");
+    s_m.led_notice = UI_LED_NOTICE_NO_FREE_SLOT;
+    check_idle(UI_TAB_LED, "idle_led_notice");
+    s_m.led_notice = UI_LED_NOTICE_NONE;
+    s_m.editor_on = true;
+    check_idle(UI_TAB_LED, "idle_led_editor");
+    base_model();
+    check_idle(UI_TAB_SETTINGS, "idle_settings");
+}
+
+static void swipe_checks(void)
+{
+    lv_indev_t *indev = lv_indev_create();
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(indev, fake_touch_read);
+
+    base_model();
+    apply();
+    show(UI_TAB_LED, false);
+    check_swipes(UI_TAB_LED, "swipe_led_top");
+    ui_scroll_page_y(300);
+    check_swipes(UI_TAB_LED, "swipe_led_middle");
+    show(UI_TAB_SETTINGS, false);
+    check_swipes(UI_TAB_SETTINGS, "swipe_settings_top");
+    ui_scroll_page_y(800);
+    check_swipes(UI_TAB_SETTINGS, "swipe_settings_light");
+    check_hard_stop(UI_TAB_LED, "hard_stop_led_top", false);
+    check_hard_stop(UI_TAB_LED, "hard_stop_led_bottom", true);
+    check_hard_stop(UI_TAB_SETTINGS, "hard_stop_settings_top", false);
+    check_hard_stop(UI_TAB_SETTINGS, "hard_stop_settings_bottom", true);
+    lv_indev_delete(indev);
+}
+
 static void scenarios(void)
 {
     /* Ride */
@@ -837,6 +1022,8 @@ int check_run(bool update_references)
     printf("GUI checks (ADR 0016) – rules in docs/ui-guidelines.md\n");
     scenarios();
     layout_sweep();
+    swipe_checks();
+    idle_checks();
 
     if (s_refs_skipped > 0) {
         printf("      reference comparison skipped (%s does not exist yet, ADR 0016)\n", SIM_REFERENCE_DIR);

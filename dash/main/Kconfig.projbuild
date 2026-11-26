@@ -1,0 +1,33 @@
+menu "dash (unmoving_pixel)"
+
+    config DASH_DEMO_CORE
+        bool "Demo mode: simulated core instead of the UART link"
+        default y
+        help
+            Runs the simulated core of the PC simulator (dash/sim/sim_core.c)
+            on the device: test ride, presets, calibration, lights. Used until
+            core speaks the UART protocol (ADR 0019).
+
+    config DASH_PERF_LOG
+        bool "Log LVGL frame statistics (sysmon) every second"
+        default n
+
+    config DASH_BENCH_SCROLL
+        bool "Benchmark: scroll a page at start and log the frame rate"
+        default n
+        help
+            Scrolls a page up and down for 10 s and logs frames per second and
+            render times. Development aid for the LVGL port.
+
+    config DASH_BENCH_TAB
+        int "Page for the benchmark (0 ride, 1 LED, 2 settings)"
+        range 0 2
+        default 2
+        depends on DASH_BENCH_SCROLL
+
+    config DASH_BENCH_MEASURE
+        bool "Benchmark: start, stop and reset a distance measurement first"
+        default n
+        depends on DASH_BENCH_SCROLL && DASH_DEMO_CORE
+
+endmenu

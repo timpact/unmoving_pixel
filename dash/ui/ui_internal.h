@@ -45,6 +45,12 @@ lv_obj_t *ui_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t color, co
 /* Set a label text only if it changed (avoids needless redraws). */
 void ui_set_text(lv_obj_t *label, const char *text);
 
+/* Show/hide and recolour only on a real change: setting a flag or style marks the
+ * layout dirty and redraws, even with the same value (P1, ADR 0019). */
+void ui_set_hidden(lv_obj_t *obj, bool hidden);
+void ui_set_text_color(lv_obj_t *obj, lv_color_t color);
+void ui_set_bg_color(lv_obj_t *obj, lv_color_t color);
+
 /* decimals_max: largest number of decimals shown; the unit is placed after
  * room for that many of the widest digits, so it never moves. */
 void ui_fixed_num_create(ui_fixed_num_t *n, lv_obj_t *parent, int32_t width, int32_t comma_x,

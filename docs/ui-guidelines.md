@@ -95,6 +95,18 @@ Dark theme. Colours have a fixed meaning **(shared: token table and C1)**:
   extended click area where the visible element is smaller (sliders, switches).
 - **I2** Controls used while riding (ride screen) are at least **64 px** high.
 - **I3** At least 10 px between neighbouring touch targets.
+- **I4** A vertical swipe that starts on a slider scrolls the page and leaves
+  the slider value unchanged. Only the page scrolls: rows and cards are not
+  scrollable themselves.
+- **I5** Pages stop hard at their ends (no elastic overscroll), so the page
+  follows the finger 1:1 up to the end.
+
+## Performance (P)
+
+- **P1** A model update with unchanged values changes nothing on screen: texts,
+  flags and styles are set only on a real change (`ui_set_text`,
+  `ui_set_hidden`, `ui_set_text_color`, `ui_set_bg_color`). Setting the same
+  value still marks the layout dirty and redraws every 50 ms.
 
 ## States and feedback (S)
 

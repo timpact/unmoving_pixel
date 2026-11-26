@@ -102,6 +102,9 @@ static lv_obj_t *plain_row(lv_obj_t *parent)
 {
     lv_obj_t *r = lv_obj_create(parent);
     lv_obj_remove_style_all(r);
+    /* a layout row must not scroll itself: it would swallow vertical swipes
+       (slider knobs overhang the row) instead of passing them to the page (I4) */
+    lv_obj_remove_flag(r, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(r, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(r, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(r, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -151,9 +154,9 @@ static lv_obj_t *flat_button(lv_obj_t *parent, int32_t h, lv_event_cb_t cb, void
 
 static void set_button_active(lv_obj_t *btn, lv_obj_t *const *labels, int n, bool active, lv_color_t on_color)
 {
-    lv_obj_set_style_bg_color(btn, active ? on_color : UI_COL_BORDER, 0);
+    ui_set_bg_color(btn, active ? on_color : UI_COL_BORDER);
     for (int i = 0; i < n; i++) {
-        lv_obj_set_style_text_color(labels[i], active ? UI_COL_BG : UI_COL_TEXT, 0);
+        ui_set_text_color(labels[i], active ? UI_COL_BG : UI_COL_TEXT);
     }
 }
 
@@ -357,7 +360,7 @@ void ui_ride_update(const ui_model_t *m)
     char buf[48];
 
     ui_set_text(s_link, m->link_ok ? LV_SYMBOL_OK "  core verbunden" : LV_SYMBOL_WARNING "  keine Verbindung");
-    lv_obj_set_style_text_color(s_link, m->link_ok ? UI_COL_OK : UI_COL_DANGER, 0);
+    ui_set_text_color(s_link, m->link_ok ? UI_COL_OK : UI_COL_DANGER);
 
     if (m->link_ok && m->battery_mv > 0) {   /* battery value comes from core */
         char v[16];
@@ -399,11 +402,7 @@ void ui_ride_update(const ui_model_t *m)
     if (panel != s_panel_shown) {
         s_panel_shown = panel;
         for (int i = 0; i < 2; i++) {
-            if (i == panel) {
-                lv_obj_remove_flag(s_panel[i], LV_OBJ_FLAG_HIDDEN);
-            } else {
-                lv_obj_add_flag(s_panel[i], LV_OBJ_FLAG_HIDDEN);
-            }
+            ui_set_hidden(s_panel[i], i != panel);
             set_button_active(s_seg_btn[i], &s_seg_label[i], 1, i == panel, UI_COL_ACCENT);
         }
     }
@@ -418,16 +417,15 @@ void ui_ride_update(const ui_model_t *m)
     set_button_active(s_light_btn, &s_light_label, 1, s_light_on, UI_COL_ACCENT);
     ui_set_text(s_light_label, s_light_on ? "Licht an" : "Licht aus");
     bool brake = m->link_ok && (m->lights & UP_LIGHTS_BRAKE_ON);
-    lv_obj_set_style_opa(s_brake_label, brake ? LV_OPA_COVER : LV_OPA_0, 0);
+    lv_opa_t brake_opa = brake ? LV_OPA_COVER : LV_OPA_TRANSP;   /* keeps its place in the row */
+    if (lv_obj_get_style_opa(s_brake_label, LV_PART_MAIN) != brake_opa) {
+        lv_obj_set_style_opa(s_brake_label, brake_opa, 0);
+    }
 
     bool blink = m->link_ok && (m->lights & UP_LIGHTS_BLINK_ON);
     for (int side = 0; side < 2; side++) {
         bool active = s_signal == UP_SIGNAL_HAZARD ||
                       s_signal == (side == 0 ? UP_SIGNAL_LEFT : UP_SIGNAL_RIGHT);
-        if (active && blink) {
-            lv_obj_remove_flag(s_arrow[side], LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_add_flag(s_arrow[side], LV_OBJ_FLAG_HIDDEN);
-        }
+        ui_set_hidden(s_arrow[side], !(active && blink));
     }
 }

@@ -1,0 +1,4 @@
+## dash dependencies (ADR 0019). LVGL must match the simulator (dash/sim/CMakeLists.txt).
+dependencies:
+  idf: ">=5.5"
+  lvgl/lvgl: "9.3.0"
