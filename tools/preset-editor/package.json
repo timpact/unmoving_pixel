@@ -1,0 +1,10 @@
+{
+  "name": "unmoving-pixel-preset-editor",
+  "private": true,
+  "description": "Preset editor for patterns and overlays (ADR 0013, 0017). No dependencies, no build step.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/",
+    "dev": "node dev-server.mjs"
+  }
+}
