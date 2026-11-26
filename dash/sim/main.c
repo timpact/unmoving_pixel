@@ -32,6 +32,22 @@ static ui_model_t s_model;
 static ui_actions_t s_actions;   /* core actions (sim_core) + dash-owned (dash_state) */
 static uint32_t s_now_ms;
 
+/* Wi-Fi of the simulator: no network, one connected device while "on" */
+static bool s_wifi_on;
+static bool fake_wifi_start(void *ctx, const char *ssid, const char *pw)
+{
+    printf("[sim] Wi-Fi access point %s on (simulated)\n", ssid);
+    s_wifi_on = true;
+    return true;
+}
+static void fake_wifi_stop(void *ctx) { s_wifi_on = false; }
+static uint8_t fake_wifi_clients(void *ctx) { return s_wifi_on ? 1 : 0; }
+static void fake_wifi_random(void *ctx, uint8_t *buf, size_t len)
+{
+    for (size_t i = 0; i < len; i++) buf[i] = (uint8_t)rand();
+}
+static const dash_wifi_t k_fake_wifi = {NULL, fake_wifi_start, fake_wifi_stop, fake_wifi_clients, fake_wifi_random};
+
 static void snapshot(const char *dir, const char *name)
 {
     char path[512];
@@ -78,7 +94,7 @@ static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
     ui_scroll_led_page(false);
     snapshot(dir, "led_top");
 
-    sim_core_set_editor(true);
+    s_actions.set_editor(NULL, true);
     model_tick();
     ui_scroll_led_page(true);
     snapshot(dir, "led_bottom");
@@ -183,7 +199,7 @@ int main(int argc, char **argv)
         return check_run(update_refs);
     }
     sim_core_init(&opt);
-    dash_state_init(NULL);   /* settings in RAM only */
+    dash_state_init(NULL, &k_fake_wifi);   /* settings in RAM only */
     dash_state_actions(&s_actions, &sim_core_actions);
 
     return shot_dir ? run_headless(shot_dir, sim_ms, measure) : run_window(zoom);

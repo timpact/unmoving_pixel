@@ -31,7 +31,4 @@ void sim_core_counters(uint32_t *total_mm, uint32_t *position_mm);
 /* GUI actions of core (ui_actions_t callbacks); combine with dash_state_actions() */
 extern const ui_actions_t sim_core_actions;
 
-/* Force the editor on (for screenshots) */
-void sim_core_set_editor(bool on);
-
 #endif /* SIM_CORE_H */

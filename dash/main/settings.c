@@ -28,7 +28,27 @@ static void set_u8(void *ctx, const char *key, uint8_t value)
     }
 }
 
-static const dash_store_t k_store = {NULL, get_u8, set_u8};
+static bool get_str(void *ctx, const char *key, char *buf, size_t len)
+{
+    (void)ctx;
+    return nvs_get_str(s_nvs, key, buf, &len) == ESP_OK;
+}
+
+static void set_str(void *ctx, const char *key, const char *value)
+{
+    (void)ctx;
+    esp_err_t err = nvs_set_str(s_nvs, key, value);
+    if (err == ESP_OK) {
+        err = nvs_commit(s_nvs);
+    }
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "saved %s", key);   /* value not logged (password) */
+    } else {
+        ESP_LOGW(TAG, "saving %s failed: %s", key, esp_err_to_name(err));
+    }
+}
+
+static const dash_store_t k_store = {NULL, get_u8, set_u8, get_str, set_str};
 
 const dash_store_t *settings_store(void)
 {

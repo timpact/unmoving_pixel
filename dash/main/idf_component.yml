@@ -2,3 +2,7 @@
 dependencies:
   idf: ">=5.5"
   lvgl/lvgl: "9.3.0"
+  # Wi-Fi over the ESP32-C6 (ADR 0013, 0019): same ESP-Hosted version as on the C6;
+  # esp_wifi_remote 1.6.3 is the last version that excludes ESP-Hosted 3.x
+  espressif/esp_hosted: "~2.13.1"
+  espressif/esp_wifi_remote: "==1.6.3"

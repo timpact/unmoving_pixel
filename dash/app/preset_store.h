@@ -15,6 +15,15 @@
 #include "up_pattern.h"
 #include "up_preset.h"
 
+/* Presets are large (~12 KB): on the device they go into PSRAM */
+#ifdef ESP_PLATFORM
+#include "esp_heap_caps.h"
+#define ps_alloc(n) heap_caps_malloc((n), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
+#else
+#include <stdlib.h>
+#define ps_alloc(n) malloc(n)
+#endif
+
 /* Results (map to the ACK codes of ADR 0004 and to HTTP status codes) */
 typedef enum {
     PS_OK = 0,

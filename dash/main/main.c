@@ -15,6 +15,8 @@
 #include <string.h>
 
 #include "board.h"
+#include "editor_api.h"
+#include "http_server.h"
 #include "dash_state.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
@@ -29,8 +31,11 @@
 #include "sdkconfig.h"
 #include "settings.h"
 #include "ui.h"
+#include "wifi_ap.h"
+#include "freertos/semphr.h"
 
 #if CONFIG_DASH_DEMO_CORE
+#include "preset_ram.h"
 #include "sim_core.h"
 #endif
 
@@ -44,6 +49,45 @@ extern const uint8_t font_ttf_end[] asm("_binary_Montserrat_Medium_ttf_end");
 
 static ui_model_t s_model;
 static ui_actions_t s_actions;   /* core actions + dash-owned actions (dash_state) */
+
+/* GUI task and HTTP server share the model, the presets and the actions */
+static SemaphoreHandle_t s_lock;
+static void app_lock(void) { xSemaphoreTakeRecursive(s_lock, portMAX_DELAY); }
+static void app_unlock(void) { xSemaphoreGiveRecursive(s_lock); }
+
+/* ---- preset editor (ADR 0013) ---- */
+static void editor_get_settings(void *ctx, editor_settings_t *out)
+{
+    (void)ctx;
+    out->global_brightness = s_model.global_brightness;
+    out->active_pattern = s_model.active_pattern;
+    out->active_overlay = s_model.active_overlay;
+    out->overlay = s_model.overlay;
+    out->main_leds = s_model.main_leds;
+    out->front_leds = s_model.front_leds;
+    out->rear_leds = s_model.rear_leds;
+    out->layout_flags = s_model.layout_flags;
+    out->time_valid = s_model.time_valid;
+}
+
+static void editor_set_time(void *ctx, uint32_t local_time)
+{
+    (void)ctx;
+    if (s_actions.set_time != NULL) {
+        s_actions.set_time(s_actions.ctx, local_time);
+    }
+}
+
+static const editor_api_t k_editor_api = {
+#if CONFIG_DASH_DEMO_CORE
+    .store = &preset_ram_store,   /* presets in dash RAM until the UART link exists */
+#else
+    .store = NULL,
+#endif
+    .get_settings = editor_get_settings,
+    .set_time = editor_set_time,
+};
+static const http_server_config_t k_http = {&k_editor_api, app_lock, app_unlock};
 
 static uint32_t now_ms(void)
 {
@@ -82,7 +126,8 @@ static void gui_task(void *arg)
         return;
     }
 
-    dash_state_init(settings_store());
+    dash_state_init(settings_store(), &wifi_ap);
+    wifi_ap_init(&k_http);   /* after NVS; brings up the C6 link in the background */
 #if CONFIG_DASH_DEMO_CORE
     sim_options_t opt = {0};
     sim_core_init(&opt);
@@ -121,7 +166,9 @@ static void gui_task(void *arg)
     while (true) {
         if ((int32_t)(xTaskGetTickCount() - next_model) >= 0) {
             next_model += pdMS_TO_TICKS(MODEL_PERIOD_MS);
+            app_lock();
             model_update(MODEL_PERIOD_MS);
+            app_unlock();
             if (s_model.display_brightness != backlight) {   /* dash setting (ADR 0010) */
                 backlight = s_model.display_brightness;
                 board_backlight_set(backlight);
@@ -150,7 +197,9 @@ static void gui_task(void *arg)
         }
 #endif
         int64_t t0 = esp_timer_get_time();
+        app_lock();   /* touch actions run inside the timer handler */
         uint32_t wait = lv_timer_handler();
+        app_unlock();
         uint32_t dt = (uint32_t)(esp_timer_get_time() - t0);
         if (dt > max_handler_us) {
             max_handler_us = dt;
@@ -184,6 +233,7 @@ void app_main(void)
     ESP_ERROR_CHECK(board_backlight_init());
     board_backlight_set(0);   /* dark until the first frame is drawn */
 
+    s_lock = xSemaphoreCreateRecursiveMutex();
     static gui_args_t args;
     ESP_ERROR_CHECK(board_display_init(&args.panel, &args.fb[0], &args.fb[1]));
     for (int i = 0; i < 2; i++) {

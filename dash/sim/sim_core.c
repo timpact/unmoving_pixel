@@ -36,7 +36,6 @@ static struct {
     uint8_t brightness;
     uint8_t led_notice;
     uint32_t notice_until_ms;
-    bool editor_on;
     up_lights_t lights;      /* end lights (ADR 0018), same code as on core */
     uint8_t main_leds;
     uint8_t front_leds;
@@ -233,21 +232,12 @@ void sim_core_fill_model(ui_model_t *m)
     m->time_valid = s.time_valid;
     m->time_now = s.time_valid ? (uint32_t)(s.time_base + s.t_ms / 1000u) : 0;
 
-    m->editor_on = s.editor_on;
-    snprintf(m->wifi_ssid, sizeof(m->wifi_ssid), "unmoving-pixel");
-    snprintf(m->wifi_password, sizeof(m->wifi_password), "k7Fq-29xa-Lm4d");
-    snprintf(m->editor_url, sizeof(m->editor_url), "http://192.168.4.1");
 }
 
 void sim_core_counters(uint32_t *total, uint32_t *position)
 {
     *total = total_mm();
     *position = position_mm();
-}
-
-void sim_core_set_editor(bool on)
-{
-    s.editor_on = on;
 }
 
 /* ---- GUI actions -------------------------------------------------------- */
@@ -284,12 +274,6 @@ static void act_select_preset(void *ctx, uint8_t category, uint8_t slot)
         }
         printf("[action] %s slot %u\n", category == UI_PRESET_PATTERN ? "pattern" : "overlay", slot);
     }
-}
-
-static void act_set_editor(void *ctx, bool on)
-{
-    s.editor_on = on;
-    printf("[action] editor %s\n", on ? "on" : "off");
 }
 
 static void act_calib_start(void *ctx)
@@ -376,7 +360,6 @@ const ui_actions_t sim_core_actions = {
     .set_brightness = act_set_brightness,
     .set_overlay = act_set_overlay,
     .select_preset = act_select_preset,
-    .set_editor = act_set_editor,
     .calib_start = act_calib_start,
     .calib_stop = act_calib_stop,
     .calib_apply = act_calib_apply,

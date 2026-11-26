@@ -36,3 +36,7 @@ CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 # Larger L2 cache with 128-byte lines for PSRAM code and frame buffers (ADR 0019)
 CONFIG_CACHE_L2_CACHE_256KB=y
 CONFIG_CACHE_L2_CACHE_LINE_128B=y
+
+# ESP-Hosted (C6 Wi-Fi, ADR 0013): SDIO buffers in PSRAM, internal RAM is too
+# short for them in the dash firmware (the P4 DMA reaches PSRAM through the cache)
+CONFIG_ESP_HOSTED_MEMPOOL_PREFER_SPIRAM=y

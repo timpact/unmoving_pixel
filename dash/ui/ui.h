@@ -125,6 +125,8 @@ typedef struct {
     char wifi_ssid[33];
     char wifi_password[65];
     char editor_url[64];
+    uint8_t  wifi_clients;        /* connected devices */
+    uint16_t editor_remaining_s;  /* > 0: Wi-Fi switches off in this many seconds (last 2 min) */
 } ui_model_t;
 
 typedef struct {
@@ -141,6 +143,7 @@ typedef struct {
     void (*set_overlay)(void *ctx, const up_overlay_t *overlay);
     void (*select_preset)(void *ctx, uint8_t category, uint8_t slot);
     void (*set_editor)(void *ctx, bool on);
+    void (*new_wifi_password)(void *ctx);                             /* ADR 0013 */
     void (*calib_start)(void *ctx);
     void (*calib_stop)(void *ctx);
     void (*calib_apply)(void *ctx, uint32_t ref_cm);   /* the app adds the timestamp */

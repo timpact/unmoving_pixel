@@ -184,7 +184,7 @@ static uint16_t store(uint8_t cat, uint8_t slot, const ps_preset_t *p)
     category_t *c = &s.cat[cat];
     ps_preset_t **dst = &c->user[slot - c->builtin_slots];
     if (*dst == NULL) {
-        *dst = malloc(sizeof(ps_preset_t));
+        *dst = ps_alloc(sizeof(ps_preset_t));
     }
     if (*dst == NULL) {
         return 0;

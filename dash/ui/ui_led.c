@@ -29,6 +29,8 @@ static lv_obj_t *s_editor_sw;
 static lv_obj_t *s_editor_panel;
 static lv_obj_t *s_qr;
 static lv_obj_t *s_wifi_text;
+static lv_obj_t *s_editor_extra;   /* status line and "Neues Passwort" */
+static lv_obj_t *s_editor_status;
 
 /* State mirrored from the model */
 static uint16_t s_pattern_rev = 0xFFFF;
@@ -184,6 +186,14 @@ static void editor_cb(lv_event_t *e)
     }
 }
 
+static void new_password_cb(lv_event_t *e)
+{
+    (void)e;
+    if (ui_actions.new_wifi_password) {
+        ui_actions.new_wifi_password(ui_actions.ctx);
+    }
+}
+
 /* ---- layout ----------------------------------------------------------- */
 
 static lv_obj_t *row(lv_obj_t *parent)
@@ -304,6 +314,22 @@ void ui_led_create(lv_obj_t *tab)
     lv_label_set_long_mode(s_wifi_text, LV_LABEL_LONG_WRAP);
     lv_obj_add_flag(s_wifi_text, UI_FLAG_WRAP_ALLOWED);
     lv_obj_add_flag(s_editor_panel, LV_OBJ_FLAG_HIDDEN);
+
+    /* connected devices / remaining time, and a new password (ADR 0013) */
+    s_editor_extra = row(card);
+    s_editor_status = ui_label(s_editor_extra, ui_fonts.small, UI_COL_MUTED, "");
+    lv_obj_set_flex_grow(s_editor_status, 1);
+    lv_label_set_long_mode(s_editor_status, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(s_editor_status, UI_FLAG_WRAP_ALLOWED);
+    lv_obj_t *b = lv_button_create(s_editor_extra);
+    lv_obj_set_height(b, 60);
+    lv_obj_set_style_radius(b, 14, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_bg_color(b, UI_COL_BORDER, 0);
+    lv_obj_add_event_cb(b, new_password_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *l = ui_label(b, ui_fonts.text, UI_COL_TEXT, LV_SYMBOL_REFRESH "  Neues Passwort");
+    lv_obj_center(l);
+    lv_obj_add_flag(s_editor_extra, LV_OBJ_FLAG_HIDDEN);
 }
 
 void ui_led_update(const ui_model_t *m)
@@ -383,6 +409,7 @@ void ui_led_update(const ui_model_t *m)
         }
     }
     ui_set_hidden(s_editor_panel, !m->editor_on);
+    ui_set_hidden(s_editor_extra, !m->editor_on);
     if (m->editor_on) {
         char qr[128];
         lv_snprintf(qr, sizeof(qr), "WIFI:T:WPA;S:%s;P:%s;;", m->wifi_ssid, m->wifi_password);
@@ -393,6 +420,18 @@ void ui_led_update(const ui_model_t *m)
         lv_snprintf(buf, sizeof(buf), "Netz:\n%s\n\nPasswort:\n%s\n\nAdresse:\n%s",
                     m->wifi_ssid, m->wifi_password, m->editor_url);
         ui_set_text(s_wifi_text, buf);
+        if (m->editor_remaining_s > 0) {
+            lv_snprintf(buf, sizeof(buf), "Ohne Zugriff aus in %u:%02u", m->editor_remaining_s / 60,
+                        m->editor_remaining_s % 60);
+            ui_set_text_color(s_editor_status, UI_COL_WARN);
+        } else if (m->wifi_clients > 0) {
+            lv_snprintf(buf, sizeof(buf), "Verbunden: %u %s", m->wifi_clients, m->wifi_clients == 1 ? "Gerät" : "Geräte");
+            ui_set_text_color(s_editor_status, UI_COL_OK);
+        } else {
+            lv_snprintf(buf, sizeof(buf), "Noch kein Gerät verbunden");
+            ui_set_text_color(s_editor_status, UI_COL_MUTED);
+        }
+        ui_set_text(s_editor_status, buf);
     }
 }
 

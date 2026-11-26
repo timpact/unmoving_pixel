@@ -325,7 +325,7 @@ static const ps_entry_t *find_entry(const editor_api_t *api, uint8_t cat, uint8_
 
 static void get_preset(const editor_api_t *api, uint8_t cat, uint8_t slot, editor_response_t *r)
 {
-    ps_preset_t *p = malloc(sizeof(*p));
+    ps_preset_t *p = ps_alloc(sizeof(*p));
     uint16_t rev;
     if (p == NULL) {
         fail(r, 500, "Kein Speicher");
@@ -356,7 +356,7 @@ static void put_preset(const editor_api_t *api, uint8_t cat, uint8_t slot, const
         fail(r, 404, "Slot existiert nicht");
         return;
     }
-    ps_preset_t *p = malloc(sizeof(*p));
+    ps_preset_t *p = ps_alloc(sizeof(*p));
     if (p == NULL) {
         fail(r, 500, "Kein Speicher");
         return;
@@ -422,7 +422,7 @@ static void delete_preset(const editor_api_t *api, uint8_t cat, uint8_t slot, ed
 
 static void preview(const editor_api_t *api, uint8_t cat, const cJSON *body, editor_response_t *r)
 {
-    ps_preset_t *p = malloc(sizeof(*p));
+    ps_preset_t *p = ps_alloc(sizeof(*p));
     if (p == NULL) {
         fail(r, 500, "Kein Speicher");
         return;
@@ -440,7 +440,7 @@ static void preview(const editor_api_t *api, uint8_t cat, const cJSON *body, edi
 static void export_all(const editor_api_t *api, editor_response_t *r)
 {
     static ps_entry_t entries[PS_MAX_SLOTS];
-    ps_preset_t *p = malloc(sizeof(*p));
+    ps_preset_t *p = ps_alloc(sizeof(*p));
     if (p == NULL) {
         fail(r, 500, "Kein Speicher");
         return;

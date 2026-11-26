@@ -14,6 +14,12 @@ typedef struct {
 
 static struct {
     const dash_store_t *store;
+    const dash_wifi_t *wifi;
+    /* preset editor via Wi-Fi (ADR 0013) */
+    bool editor_on;
+    char wifi_password[DASH_WIFI_PASSWORD_LEN + 1];
+    uint32_t editor_activity_ms;
+    uint32_t requests_seen;
     settings_t cur;
     settings_t saved;
     bool dirty;
@@ -34,10 +40,63 @@ static uint8_t load(const char *key, uint8_t min, uint8_t max, uint8_t def)
     return v;
 }
 
-void dash_state_init(const dash_store_t *store)
+/* requests counted by the HTTP task; read by the GUI task in dash_state_update */
+static volatile uint32_t s_requests;
+
+void dash_state_editor_activity(void)
+{
+    s_requests++;
+}
+
+void dash_state_make_password(const uint8_t random[12], char *out)
+{
+    static const char alphabet[] = "abcdefghijkmnpqrstuvwxyz23456789";   /* 32, no 0/o/1/l */
+    int k = 0;
+    for (int i = 0; i < 12; i++) {
+        if (i > 0 && i % 3 == 0) {
+            out[k++] = '-';
+        }
+        out[k++] = alphabet[random[i] & 31];
+    }
+    out[k] = '\0';
+}
+
+/* a stored password has the generated form (anything else is replaced) */
+static bool password_valid(const char *pw)
+{
+    if (strlen(pw) != DASH_WIFI_PASSWORD_LEN) {
+        return false;
+    }
+    for (int i = 0; i < DASH_WIFI_PASSWORD_LEN; i++) {
+        bool dash = i % 4 == 3;
+        if (dash ? pw[i] != '-' : !((pw[i] >= 'a' && pw[i] <= 'z') || (pw[i] >= '2' && pw[i] <= '9'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void new_password(void)
+{
+    uint8_t rnd[12];
+    s.wifi->random(s.wifi->ctx, rnd, sizeof(rnd));
+    dash_state_make_password(rnd, s.wifi_password);
+    if (s.store != NULL && s.store->set_str != NULL) {
+        s.store->set_str(s.store->ctx, DASH_KEY_WIFI_PASSWORD, s.wifi_password);
+    }
+}
+
+void dash_state_init(const dash_store_t *store, const dash_wifi_t *wifi)
 {
     memset(&s, 0, sizeof(s));
     s.store = store;
+    s.wifi = wifi;
+    s.requests_seen = s_requests;
+    if (store != NULL && store->get_str != NULL &&
+        (!store->get_str(store->ctx, DASH_KEY_WIFI_PASSWORD, s.wifi_password, sizeof(s.wifi_password)) ||
+         !password_valid(s.wifi_password))) {
+        s.wifi_password[0] = '\0';   /* generated when the editor is switched on */
+    }
     s.cur.display_brightness =
         load(DASH_KEY_DISPLAY_BRIGHTNESS, DASH_MIN_DISPLAY_BRIGHTNESS, 100, DASH_DEF_DISPLAY_BRIGHTNESS);
     s.cur.measure_decimals = load(DASH_KEY_MEASURE_DECIMALS, 0, DASH_MAX_MEASURE_DECIMALS, DASH_DEF_MEASURE_DECIMALS);
@@ -77,6 +136,16 @@ void dash_state_update(uint32_t now_ms, uint32_t total_mm, uint32_t position_mm)
     if (s.dirty && now_ms - s.changed_ms >= DASH_SAVE_DELAY_MS) {
         dash_state_flush();
     }
+    uint32_t req = s_requests;
+    if (req != s.requests_seen) {
+        s.requests_seen = req;
+        s.editor_activity_ms = now_ms;
+    }
+    if (s.editor_on && now_ms - s.editor_activity_ms >= DASH_EDITOR_IDLE_MS) {
+        s.wifi->stop(s.wifi->ctx);
+        s.editor_on = false;
+        printf("[dash] editor: Wi-Fi off after 10 min without request\n");
+    }
 }
 
 static void changed(void)
@@ -101,6 +170,17 @@ void dash_state_fill_model(ui_model_t *m)
     m->measure_decimals = s.cur.measure_decimals;
     m->measure_add_backward = s.cur.measure_add_backward != 0;
     m->ride_panel = s.ride_panel;
+
+    m->editor_on = s.editor_on;
+    snprintf(m->wifi_ssid, sizeof(m->wifi_ssid), "%s", DASH_WIFI_SSID);
+    snprintf(m->wifi_password, sizeof(m->wifi_password), "%s", s.wifi_password);
+    snprintf(m->editor_url, sizeof(m->editor_url), "%s", DASH_EDITOR_URL);
+    m->wifi_clients = s.editor_on ? s.wifi->clients(s.wifi->ctx) : 0;
+    uint32_t idle = s.now_ms - s.editor_activity_ms;
+    m->editor_remaining_s = 0;
+    if (s.editor_on && idle + DASH_EDITOR_WARN_MS > DASH_EDITOR_IDLE_MS && idle < DASH_EDITOR_IDLE_MS) {
+        m->editor_remaining_s = (uint16_t)((DASH_EDITOR_IDLE_MS - idle + 999) / 1000);
+    }
 }
 
 /* ---- GUI actions -------------------------------------------------------- */
@@ -174,6 +254,41 @@ static void act_set_ride_panel(void *ctx, uint8_t panel)
     s.ride_panel = panel == UI_RIDE_PANEL_MEASURE ? UI_RIDE_PANEL_MEASURE : UI_RIDE_PANEL_LIGHTS;
 }
 
+static void act_set_editor(void *ctx, bool on)
+{
+    (void)ctx;
+    if (on == s.editor_on || s.wifi == NULL) {
+        return;
+    }
+    if (on) {
+        if (s.wifi_password[0] == '\0') {
+            new_password();
+        }
+        s.editor_activity_ms = s.now_ms;
+        s.editor_on = s.wifi->start(s.wifi->ctx, DASH_WIFI_SSID, s.wifi_password);
+        printf("[dash] editor: Wi-Fi %s\n", s.editor_on ? "on" : "could not be started");
+    } else {
+        s.wifi->stop(s.wifi->ctx);
+        s.editor_on = false;
+        printf("[dash] editor: Wi-Fi off\n");
+    }
+}
+
+static void act_new_wifi_password(void *ctx)
+{
+    (void)ctx;
+    if (s.wifi == NULL) {
+        return;
+    }
+    new_password();
+    printf("[dash] editor: new Wi-Fi password\n");
+    if (s.editor_on) {   /* connected devices need the new password */
+        s.wifi->stop(s.wifi->ctx);
+        s.editor_activity_ms = s.now_ms;
+        s.editor_on = s.wifi->start(s.wifi->ctx, DASH_WIFI_SSID, s.wifi_password);
+    }
+}
+
 void dash_state_actions(ui_actions_t *out, const ui_actions_t *core)
 {
     *out = *core;
@@ -184,4 +299,6 @@ void dash_state_actions(ui_actions_t *out, const ui_actions_t *core)
     out->set_measure_decimals = act_set_measure_decimals;
     out->set_measure_add_backward = act_set_measure_add_backward;
     out->set_ride_panel = act_set_ride_panel;
+    out->set_editor = act_set_editor;
+    out->new_wifi_password = act_new_wifi_password;
 }

@@ -585,7 +585,7 @@ static void base_model(void)
     s_m.time_valid = true;
     s_m.time_now = 1795003600u;
     snprintf(s_m.wifi_ssid, sizeof(s_m.wifi_ssid), "unmoving-pixel");
-    snprintf(s_m.wifi_password, sizeof(s_m.wifi_password), "k7Fq-29xa-Lm4d");
+    snprintf(s_m.wifi_password, sizeof(s_m.wifi_password), "k7q-29v-mn4-x8d");
     snprintf(s_m.editor_url, sizeof(s_m.editor_url), "http://192.168.4.1");
 }
 
@@ -946,6 +946,10 @@ static void scenarios(void)
     apply();
     show(UI_TAB_LED, true);
     run_scenario("led_bottom_editor");
+    s_m.wifi_clients = 2;
+    run_scenario("led_bottom_editor_clients");
+    s_m.editor_remaining_s = 119;
+    run_scenario("led_bottom_editor_remaining");
 
     /* Settings */
     base_model();
