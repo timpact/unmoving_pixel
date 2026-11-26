@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-24 (updated 2026-11-25: full message catalogue;
-  2026-11-26: lights and strip layout, ADR 0018)
+  2026-11-26: lights and strip layout, ADR 0018; encoding details for the
+  implementation in common/)
 
 ## Context
 
@@ -27,8 +28,15 @@ user commands. The link runs next to LED supply lines on a vibrating vehicle.
 ```
 
 - Little-endian
-- CRC16 over type, length and payload
+- CRC16 over type, length and payload: CRC-16/CCITT-FALSE (polynomial 0x1021,
+  initial value 0xFFFF, no reflection, no final XOR; check value for "123456789"
+  is 0x29B1)
 - Frames with a wrong CRC are dropped silently
+- Maximum frame size: 2 + 1 + 1 + 255 + 2 = 261 bytes
+- The receiver drops a partly received frame if no byte arrives for 20 ms and
+  searches for the next `0xAA 0x55`
+- A message whose payload length does not match its type is ignored (commands
+  are answered with ACK status "invalid")
 
 ### Messages
 
@@ -41,12 +49,12 @@ sent by core, 0x80–0xFF by dash.
 |---|---|---|---|
 | 0x01 | STATUS | every 50 ms | see below (28 bytes) |
 | 0x02 | SETTINGS | at start, on every change, on request | see below |
-| 0x03 | PRESET_LIST | on request | `category`, `index`, `count`, then up to 10 entries |
-| 0x04 | PRESET_HEADER | on request (GET_PRESET) | `category`, `slot`, preset header |
+| 0x03 | PRESET_LIST | on request | `category`, `total` (entries in the whole list), `index` (of the first entry in this frame), `count` (entries in this frame), then up to 10 entries |
+| 0x04 | PRESET_HEADER | on request (GET_PRESET) | `category`, `slot`, `revision` (uint16), preset header |
 | 0x05 | PRESET_CHUNK | after PRESET_HEADER | `chunk_index` (uint16), data (≤ 240 bytes) |
 | 0x06 | CALIB_STATUS | every 200 ms while a calibration is active, and after stop | `state` (uint8: idle, counting, stopped), `counts` (int32, net), distance with current factor (int32, mm) (ADR 0014, 0015) |
 | 0x07 | CALIB_HISTORY | on request and after CALIB_APPLY | current `nm_per_count` (uint32), `count`, then up to 10 entries of 20 bytes (ADR 0014) |
-| 0x7F | ACK | answer to every command | `seq`, `status` (0 = OK, else error code, e.g. revision conflict, slot read-only, no free slot) |
+| 0x7F | ACK | answer to every command | `seq`, `status` (see below) |
 
 STATUS payload:
 
@@ -83,6 +91,31 @@ SETTINGS payload:
 | brake_threshold | uint8 | deceleration threshold in 0.1 m/s², 5 … 30 |
 
 Preset categories: 0 = pattern (ADR 0011), 1 = overlay (ADR 0012).
+
+ACK status codes:
+
+| Code | Meaning |
+|---|---|
+| 0 | OK |
+| 1 | unknown command |
+| 2 | invalid (wrong payload length or value out of range) |
+| 3 | revision conflict (PRESET_BEGIN, ADR 0017) |
+| 4 | slot read-only (built-in preset) |
+| 5 | no free slot |
+| 6 | not found (empty slot) |
+| 7 | busy (another preset transfer is running) |
+| 8 | CRC mismatch (PRESET_COMMIT) |
+| 9 | out of sequence (chunk index or commit without BEGIN) |
+
+Preset headers:
+
+- Pattern: the pattern header of ADR 0011 (23 bytes: `format_version`, `name`,
+  `segment_count`, `crc32`), followed by the segments in PRESET_CHUNKs.
+  CRC32: CRC-32/ISO-HDLC (as in zlib, check value 0xCBF43926) over the header
+  without the `crc32` field and all segments.
+- Overlay (25 bytes): `format_version` (uint8, 1), `name` (16 bytes, UTF-8,
+  zero-padded), overlay parameters (8 bytes, as in SETTINGS). No chunks follow;
+  the frame CRC protects it.
 
 PRESET_LIST entry (24 bytes): `slot` (uint8), `flags` (uint8: built-in, user,
 empty), `revision` (uint16, incremented on every write of this slot, ADR 0017),
@@ -144,7 +177,9 @@ ACK carrying the same `seq`.
 ## Consequences
 
 - Simple and robust; easy to debug with a USB-UART adapter.
-- The frame definition lives in `common/` and is shared by both firmwares.
+- The frame definition lives in `common/` (`up_proto.h`, `up_proto.c`) and is
+  shared by both firmwares. The first implemented version is
+  `protocol_version = 1`.
 - No conflicting odometer values, since only core stores them.
 - Adding fields requires a new `protocol_version` or new message types.
 - The 1-byte length field limits payloads to 255 bytes; larger data (patterns)
