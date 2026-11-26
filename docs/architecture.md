@@ -132,6 +132,7 @@ See [`adr/`](adr/).
 | [0014](adr/0014-encoder-calibration.md) | Encoder calibration | Accepted |
 | [0015](adr/0015-direction-of-travel.md) | Direction of travel | Accepted |
 | [0016](adr/0016-gui-guidelines-and-automated-checks.md) | GUI guidelines and automated GUI checks | Accepted |
+| [0017](adr/0017-preset-editor-functions.md) | Preset editor – functions and interaction | Accepted |
 
 ## Open points
 

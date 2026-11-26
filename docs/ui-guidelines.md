@@ -6,6 +6,10 @@ a new rule, it is added here (and, if measurable, as a check).
 
 Rules are numbered so that checks and reviews can refer to them (e.g. `N2`).
 
+Rules marked **(shared)** also apply to the preset editor
+(`docs/editor-guidelines.md`), which refers to them instead of repeating them.
+Changing a shared rule changes both GUIs.
+
 ## Display and layout (L)
 
 - **L1** Portrait, 480×800 px, RGB565. Physical size ~56×93 mm → **~8.6 px/mm**.
@@ -21,7 +25,8 @@ Rules are numbered so that checks and reviews can refer to them (e.g. `N2`).
 
 ## Typography (T)
 
-- **T1** One typeface: Montserrat Medium. Fixed size steps only:
+- **T1** One typeface: Montserrat Medium **(shared: typeface only)**. Fixed size
+  steps only:
 
   | Role | Size |
   |---|---|
@@ -37,12 +42,12 @@ Rules are numbered so that checks and reviews can refer to them (e.g. `N2`).
   and tab names are single-line.
 - **T3** Button labels are short (one or two words). Explanations belong in a
   text above the buttons, not on the button.
-- **T4** Language: German. Umlauts and ß must render correctly.
+- **T4** Language: German. Umlauts and ß must render correctly. **(shared)**
 
 ## Numbers and units (N)
 
 - **N1** German format: thousands separator `.`, decimal separator `,`
-  (e.g. `1.234,56`). Percentages with a space: `80 %`.
+  (e.g. `1.234,56`). Percentages with a space: `80 %`. **(shared)**
 - **N2** **Fixed decimal comma:** the integer part is right-aligned to a fixed
   position. The comma never moves, whatever digits are shown.
 - **N3** **Fixed unit position:** the unit sits at a fixed position after room
@@ -67,7 +72,7 @@ Rules are numbered so that checks and reviews can refer to them (e.g. `N2`).
 
 ## Colours (C)
 
-Dark theme. Colours have a fixed meaning:
+Dark theme. Colours have a fixed meaning **(shared: token table and C1)**:
 
 | Token | Hex | Meaning |
 |---|---|---|

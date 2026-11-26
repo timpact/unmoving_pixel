@@ -89,8 +89,9 @@ Three screens, switched by swiping or by tabs (icon above text) at the bottom:
 2. **LED**
    - Global brightness slider
    - Pattern list (built-in and user patterns from core, ADR 0011, 0013)
-   - Overlay list (presets, ADR 0012) and sliders for the active overlay:
-     level at start, middle and end, fade length at start and end
+   - Overlay list (presets, ADR 0012) and sliders for the active overlay preset:
+     level at start, middle and end, fade length at start and end. Changes go
+     into the preset; a built-in preset is copied first (ADR 0017)
    - Button to enable the preset editor via Wi-Fi (ADR 0013), showing SSID,
      password and URL as text and QR code
 

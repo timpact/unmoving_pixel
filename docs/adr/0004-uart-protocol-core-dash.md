@@ -40,12 +40,12 @@ sent by core, 0x80–0xFF by dash.
 |---|---|---|---|
 | 0x01 | STATUS | every 50 ms | see below (27 bytes) |
 | 0x02 | SETTINGS | at start, on every change, on request | see below |
-| 0x03 | PRESET_LIST | on request | `category`, `index`, `count`, then up to 11 entries |
+| 0x03 | PRESET_LIST | on request | `category`, `index`, `count`, then up to 10 entries |
 | 0x04 | PRESET_HEADER | on request (GET_PRESET) | `category`, `slot`, preset header |
 | 0x05 | PRESET_CHUNK | after PRESET_HEADER | `chunk_index` (uint16), data (≤ 240 bytes) |
 | 0x06 | CALIB_STATUS | every 200 ms while a calibration is active, and after stop | `state` (uint8: idle, counting, stopped), `counts` (int32, net), distance with current factor (int32, mm) (ADR 0014, 0015) |
 | 0x07 | CALIB_HISTORY | on request and after CALIB_APPLY | current `nm_per_count` (uint32), `count`, then up to 10 entries of 20 bytes (ADR 0014) |
-| 0x7F | ACK | answer to every command | `seq`, `status` (0 = OK, else error code) |
+| 0x7F | ACK | answer to every command | `seq`, `status` (0 = OK, else error code, e.g. revision conflict, slot read-only, no free slot) |
 
 STATUS payload:
 
@@ -69,13 +69,14 @@ SETTINGS payload:
 | global_brightness | uint8 | 0 … 100 % (ADR 0012) |
 | overlay | 8 bytes | active overlay: type, level_start, level_mid, level_end (uint8 each), fade_start_mm, fade_end_mm (uint16 each) (ADR 0012) |
 | active_pattern | uint8 | active pattern slot |
-| active_overlay | uint8 | overlay preset the active overlay was loaded from (0xFF = modified) |
+| active_overlay | uint8 | active overlay preset slot (ADR 0012, 0017) |
 | preset_list_rev | uint16 | incremented whenever presets are stored or deleted |
 
 Preset categories: 0 = pattern (ADR 0011), 1 = overlay (ADR 0012).
 
-PRESET_LIST entry (22 bytes): `slot` (uint8), `flags` (uint8: built-in, user,
-empty), `length_cm` (uint32, total pattern length, patterns only, else 0),
+PRESET_LIST entry (24 bytes): `slot` (uint8), `flags` (uint8: built-in, user,
+empty), `revision` (uint16, incremented on every write of this slot, ADR 0017),
+`length_cm` (uint32, total pattern length, patterns only, else 0),
 `name` (16 bytes).
 
 Preset data in PRESET_HEADER/PRESET_CHUNK and PRESET_BEGIN/PRESET_CHUNK:
@@ -90,14 +91,14 @@ ACK carrying the same `seq`.
 | Type | Name | Payload after `seq` |
 |---|---|---|
 | 0x81 | SET_BRIGHTNESS | global (uint8) |
-| 0x82 | SET_OVERLAY | active overlay parameters (8 bytes, as in SETTINGS) |
+| 0x82 | SET_OVERLAY | overlay parameters (8 bytes, as in SETTINGS); core writes them into the active overlay preset (debounced 2 s); a built-in preset is copied to a new user slot first (ADR 0012) |
 | 0x83 | SELECT_PRESET | category, slot |
 | 0x84 | RESET_TRIP | – |
 | 0x85 | SAVE_ODOMETER | – (ADR 0009) |
 | 0x86 | GET_SETTINGS | – |
 | 0x87 | GET_PRESET_LIST | category |
 | 0x88 | GET_PRESET | category, slot |
-| 0x89 | PRESET_BEGIN | category, target slot (0xFF = preview, not stored), preset header |
+| 0x89 | PRESET_BEGIN | category, target slot (0xFF = preview, not stored), expected revision (uint16, 0xFFFF = new slot), preset header |
 | 0x8A | PRESET_CHUNK | `chunk_index` (uint16), data (≤ 240 bytes) |
 | 0x8B | PRESET_COMMIT | – (core checks CRC32, stores or previews, ACKs) |
 | 0x8C | PRESET_DELETE | category, slot |

@@ -1,7 +1,8 @@
 # ADR 0012: LED brightness and strip overlay
 
 - Status: Accepted
-- Date: 2026-11-25 (updated 2026-11-25: profile redefined as strip overlay)
+- Date: 2026-11-25 (updated 2026-11-25: profile redefined as strip overlay;
+  2026-11-26: dash sliders write into the overlay preset, ADR 0017)
 
 ## Context
 
@@ -76,9 +77,16 @@ fade meets the middle section.
 ### Overlay presets
 
 Like patterns, overlays can be stored as named presets (built-in from the
-repository, plus up to 8 user slots on core, ADR 0013). Selecting a preset copies
-its parameters into the active overlay; the sliders on the dash then adjust the
-active overlay.
+repository, plus up to 8 user slots on core, ADR 0013). One overlay preset is
+active.
+
+- The sliders on the dash change the **active overlay preset itself**; core saves
+  it 2 s after the last change. There is no separate "modified" state.
+- The first change to a **built-in** overlay creates a user copy
+  "<name> (2)" and selects it; the built-in preset stays unchanged. If no user
+  slot is free, the dash shows a message and the values stay unchanged.
+- The preset editor works on the same presets; conflicts are detected with a
+  revision per preset (ADR 0017).
 
 ### Output to SK9822
 
@@ -107,4 +115,7 @@ active overlay.
 - Good low-brightness behaviour thanks to using the SK9822 current setting.
 - Brightness changes are visible immediately while dragging, without flash wear.
 - If the power fails within 2 s after a change, that change is lost (acceptable).
+- Adjusting an overlay on the dash changes the preset permanently; to keep a
+  version, duplicate it in the editor first. Automatic copies of built-in
+  overlays can fill the user slots.
 - The current limit needs the final power supply data (open point).

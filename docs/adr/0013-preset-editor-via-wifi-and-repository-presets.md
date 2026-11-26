@@ -94,7 +94,8 @@ presets/
 |---|---|---|
 | GET | `/api/{category}` | list of slots (built-in and user) |
 | GET | `/api/{category}/{slot}` | one preset as JSON |
-| PUT | `/api/{category}/{slot}` | store a preset (user slots only) |
+| GET | `/api/state` | settings and preset lists with revisions; polled every second by the editor (ADR 0017) |
+| PUT | `/api/{category}/{slot}` | store a preset (user slots only); carries the base revision, answers `409 Conflict` if the preset changed meanwhile (ADR 0017) |
 | DELETE | `/api/{category}/{slot}` | delete a user preset |
 | POST | `/api/preview/{category}` | try a preset on the strip without storing it |
 | GET | `/api/export` | all user presets as one JSON bundle |
