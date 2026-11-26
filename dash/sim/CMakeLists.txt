@@ -40,6 +40,16 @@ add_custom_command(
     DEPENDS ${FONT_TTF} ${CMAKE_CURRENT_SOURCE_DIR}/embed_file.cmake
     COMMENT "Embedding Montserrat-Medium.ttf")
 
+# ---- Built-in presets from presets/ (ADR 0013) ----
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+file(GLOB PRESET_FILES CONFIGURE_DEPENDS ${REPO_DIR}/presets/patterns/*.json ${REPO_DIR}/presets/overlays/*.json)
+set(PRESETS_C ${CMAKE_CURRENT_BINARY_DIR}/presets_builtin.c)
+add_custom_command(
+    OUTPUT ${PRESETS_C}
+    COMMAND Python3::Interpreter ${REPO_DIR}/tools/gen_presets.py ${REPO_DIR}/presets ${PRESETS_C}
+    DEPENDS ${PRESET_FILES} ${REPO_DIR}/tools/gen_presets.py
+    COMMENT "Generating built-in presets")
+
 add_executable(dash_sim
     main.c
     sim_core.c
@@ -52,6 +62,8 @@ add_executable(dash_sim
     ${DASH_DIR}/ui/ui_settings.c
     ${DASH_DIR}/app/measurement.c
     ${DASH_DIR}/app/dash_state.c
+    ${DASH_DIR}/app/preset_ram.c
+    ${PRESETS_C}
     ${REPO_DIR}/common/src/up_lights.c
     ${FONT_C})
 

@@ -22,6 +22,14 @@ static struct {
     up_overlay_t overlay;   /* values in effect */
 } s;
 
+/* name into a buffer of UP_PRESET_NAME_BYTES + 1, always terminated */
+static void copy_name(char *dst, const char *src)
+{
+    size_t n = strnlen(src, UP_PRESET_NAME_BYTES);
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
 static category_t *category(uint8_t cat)
 {
     return cat <= UP_CAT_OVERLAY ? &s.cat[cat] : NULL;
@@ -43,12 +51,12 @@ static void builtin_preset(uint8_t cat, uint8_t slot, ps_preset_t *p)
     p->category = cat;
     if (cat == UP_CAT_PATTERN) {
         const up_builtin_pattern_t *b = &up_builtin_patterns[slot];
-        strncpy(p->name, b->name, UP_PRESET_NAME_BYTES);
+        copy_name(p->name, b->name);
         p->segment_count = b->segment_count;
         memcpy(p->segments, b->segments, sizeof(up_segment_t) * b->segment_count);
     } else {
         const up_builtin_overlay_t *b = &up_builtin_overlays[slot];
-        strncpy(p->name, b->name, UP_PRESET_NAME_BYTES);
+        copy_name(p->name, b->name);
         p->overlay = b->overlay;
     }
 }
@@ -128,7 +136,7 @@ static int ram_list(void *ctx, uint8_t cat, ps_entry_t *out, int max)
         e->kind = name == NULL ? PS_EMPTY : is_builtin(c, (uint8_t)slot) ? PS_BUILTIN : PS_USER;
         e->revision = c->revision[slot];
         if (name != NULL) {
-            strncpy(e->name, name, UP_PRESET_NAME_BYTES);
+            copy_name(e->name, name);
         }
         if (name != NULL && cat == UP_CAT_PATTERN) {
             uint16_t count;
@@ -285,7 +293,7 @@ ps_result_t preset_ram_dash_set_overlay(const up_overlay_t *values, uint8_t *slo
     static ps_preset_t next;   /* overlays need no segments, but the type is large */
     memset(&next, 0, sizeof(next) - sizeof(next.segments));
     next.category = UP_CAT_OVERLAY;
-    strncpy(next.name, name, UP_PRESET_NAME_BYTES);
+    copy_name(next.name, name);
     next.overlay = *values;
     if (is_builtin(c, slot)) {
         int free_slot = -1;

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "up_lights.h"
+#include "preset_ram.h"
 #include "up_preset.h"
 #include "up_strip.h"
 
@@ -20,44 +21,7 @@ void ui_fmt_datetime(char *buf, size_t len, uint32_t t);
 #define TRUE_NM       26180u   /* simulated real factor of the encoder (nm per count) */
 #define HYSTERESIS_MM 5.0      /* direction hysteresis for the travelled distance (ADR 0015) */
 
-typedef struct {
-    uint8_t slot;
-    const char *name;
-    up_overlay_t ov;
-} overlay_preset_t;
-
-/* Overlay slots as on core (mock numbering, see tools/preset-editor/mock-dash.mjs):
-   0 … 7 built-in (read-only), 8 … 15 user */
-#define OV_BUILTIN_SLOTS 8
-#define OV_USER_SLOTS    8
-#define OV_SLOTS         (OV_BUILTIN_SLOTS + OV_USER_SLOTS)
-#define NOTICE_MS        5000u
-
-typedef struct {
-    bool used;
-    char name[UP_PRESET_NAME_BYTES + 1];
-    up_overlay_t ov;
-} overlay_slot_t;
-
-static const overlay_preset_t k_overlays[] = {
-    {0, "Ohne", {UP_OVERLAY_TYPE_EDGE_FADE, 100, 100, 100, 0, 0}},
-    {1, "Weiche Ränder", {UP_OVERLAY_TYPE_EDGE_FADE, 10, 100, 10, 150, 150}},
-    {2, "Spotlight", {UP_OVERLAY_TYPE_EDGE_FADE, 0, 100, 0, 250, 250}},
-    {3, "Nach vorn heller", {UP_OVERLAY_TYPE_EDGE_FADE, 20, 100, 100, 350, 0}},
-    {8, "Mein Overlay", {UP_OVERLAY_TYPE_EDGE_FADE, 30, 90, 60, 100, 200}},
-};
-
-static const struct {
-    uint8_t slot;
-    const char *name;
-} k_patterns[] = {
-    {0, "Streifen"},
-    {1, "Punkte"},
-    {2, "Regenbogen"},
-    {3, "Zebra"},
-    {8, "Lauflicht rot"},
-    {9, "10-m-Muster"},
-};
+#define NOTICE_MS 5000u
 
 static struct {
     sim_options_t opt;
@@ -70,11 +34,6 @@ static struct {
     int hyst_dir;          /* current direction for the hysteresis: +1 / -1 */
     uint32_t trip_start_mm;
     uint8_t brightness;
-    up_overlay_t overlay;
-    uint8_t active_pattern;
-    uint8_t active_overlay;
-    overlay_slot_t ovs[OV_SLOTS];
-    uint16_t overlay_list_rev;
     uint8_t led_notice;
     uint32_t notice_until_ms;
     bool editor_on;
@@ -165,25 +124,32 @@ void sim_core_init(const sim_options_t *opt)
     s.front_leds = UP_STRIP_END_DEF;
     s.rear_leds = UP_STRIP_END_DEF;
     s.layout_flags = UP_LAYOUT_LEFT_DATA_FRONT | UP_LAYOUT_RIGHT_DATA_FRONT;
-    for (size_t i = 0; i < sizeof(k_overlays) / sizeof(k_overlays[0]); i++) {
-        overlay_slot_t *o = &s.ovs[k_overlays[i].slot];
-        o->used = true;
-        snprintf(o->name, sizeof(o->name), "%s", k_overlays[i].name);
-        o->ov = k_overlays[i].ov;
-    }
+    /* presets: built-ins from presets/ (generated), two demo user presets */
+    preset_ram_init();
+    static ps_preset_t p;
+    uint16_t rev;
+    memset(&p, 0, sizeof(p));
+    p.category = UP_CAT_OVERLAY;
+    snprintf(p.name, sizeof(p.name), "Mein Overlay");
+    p.overlay = (up_overlay_t){UP_OVERLAY_TYPE_EDGE_FADE, 30, 90, 60, 100, 200};
+    preset_ram_store.put(NULL, UP_CAT_OVERLAY, PRESET_RAM_OVERLAY_BUILTIN, PS_REV_NEW, &p, &rev);
+    memset(&p, 0, sizeof(p));
+    p.category = UP_CAT_PATTERN;
+    snprintf(p.name, sizeof(p.name), "Lauflicht rot");
+    p.segment_count = 2;
+    p.segments[0] = (up_segment_t){20, 100, 255, 0, 0};
+    p.segments[1] = (up_segment_t){80, 0, 0, 0, 0};
+    preset_ram_store.put(NULL, UP_CAT_PATTERN, PRESET_RAM_PATTERN_BUILTIN, PS_REV_NEW, &p, &rev);
     if (opt->overlays_full) {   /* all user slots taken: test the "no free slot" notice */
-        for (int slot = OV_BUILTIN_SLOTS; slot < OV_SLOTS; slot++) {
-            if (!s.ovs[slot].used) {
-                s.ovs[slot].used = true;
-                snprintf(s.ovs[slot].name, sizeof(s.ovs[slot].name), "Eigenes %d", slot - OV_BUILTIN_SLOTS + 1);
-                s.ovs[slot].ov = k_overlays[0].ov;
-            }
+        memset(&p, 0, sizeof(p));
+        p.category = UP_CAT_OVERLAY;
+        p.overlay = (up_overlay_t){UP_OVERLAY_TYPE_EDGE_FADE, 100, 100, 100, 0, 0};
+        for (int i = 1; i < PRESET_RAM_OVERLAY_USER; i++) {
+            snprintf(p.name, sizeof(p.name), "Eigenes %d", i + 1);
+            preset_ram_store.put(NULL, UP_CAT_OVERLAY, (uint8_t)(PRESET_RAM_OVERLAY_BUILTIN + i), PS_REV_NEW, &p, &rev);
         }
     }
-    s.overlay_list_rev = 1;
-    s.active_pattern = 0;
-    s.active_overlay = 1;
-    s.overlay = s.ovs[1].ov;
+    preset_ram_select(UP_CAT_OVERLAY, 1);
 
     /* calibration: stored factor slightly off, two older entries */
     s.nm_per_count = 26500;
@@ -211,6 +177,24 @@ void sim_core_step(uint32_t dt_ms)
     }
 }
 
+/* preset list of the GUI: existing presets only (ADR 0004 PRESET_LIST) */
+static void fill_list(uint8_t cat, ui_preset_list_t *l)
+{
+    static ps_entry_t entries[PS_MAX_SLOTS];
+    int n = preset_ram_store.list(NULL, cat, entries, PS_MAX_SLOTS);
+    l->rev = preset_ram_store.list_rev(NULL);
+    l->count = 0;
+    for (int i = 0; i < n && l->count < UI_MAX_PRESETS; i++) {
+        if (entries[i].kind == PS_EMPTY) {
+            continue;
+        }
+        ui_preset_entry_t *e = &l->entries[l->count++];
+        e->slot = entries[i].slot;
+        e->builtin = entries[i].kind == PS_BUILTIN;
+        snprintf(e->name, UI_PRESET_NAME_LEN, "%s", entries[i].name);
+    }
+}
+
 void sim_core_fill_model(ui_model_t *m)
 {
     uint32_t tot = total_mm();
@@ -222,9 +206,9 @@ void sim_core_fill_model(ui_model_t *m)
     m->battery_mv = 7420;
 
     m->global_brightness = s.brightness;
-    m->overlay = s.overlay;
-    m->active_pattern = s.active_pattern;
-    m->active_overlay = s.active_overlay;
+    m->overlay = preset_ram_overlay();
+    m->active_pattern = preset_ram_active(UP_CAT_PATTERN);
+    m->active_overlay = preset_ram_active(UP_CAT_OVERLAY);
     m->led_notice = s.led_notice;
     m->strip_length_mm = UP_STRIP_MAIN_MM(s.main_leds);
     m->main_leds = s.main_leds;
@@ -236,24 +220,8 @@ void sim_core_fill_model(ui_model_t *m)
     m->brake_enabled = s.lights.brake_enabled;
     m->brake_threshold = s.lights.brake_threshold;
 
-    m->patterns.rev = 1;
-    m->patterns.count = sizeof(k_patterns) / sizeof(k_patterns[0]);
-    for (int i = 0; i < m->patterns.count; i++) {
-        m->patterns.entries[i].slot = k_patterns[i].slot;
-        m->patterns.entries[i].builtin = k_patterns[i].slot < 8;
-        snprintf(m->patterns.entries[i].name, UI_PRESET_NAME_LEN, "%s", k_patterns[i].name);
-    }
-    m->overlays.rev = s.overlay_list_rev;
-    m->overlays.count = 0;
-    for (int slot = 0; slot < OV_SLOTS; slot++) {
-        if (!s.ovs[slot].used) {
-            continue;
-        }
-        ui_preset_entry_t *e = &m->overlays.entries[m->overlays.count++];
-        e->slot = (uint8_t)slot;
-        e->builtin = slot < OV_BUILTIN_SLOTS;
-        snprintf(e->name, UI_PRESET_NAME_LEN, "%s", s.ovs[slot].name);
-    }
+    fill_list(UP_CAT_PATTERN, &m->patterns);
+    fill_list(UP_CAT_OVERLAY, &m->overlays);
 
     m->calib_state = s.calib_state;
     m->calib_counts = s.calib_counts;
@@ -294,35 +262,15 @@ static void act_set_brightness(void *ctx, uint8_t percent)
    preset is copied to a free user slot first */
 static void act_set_overlay(void *ctx, const up_overlay_t *o)
 {
-    uint8_t slot = s.active_overlay;
-    if (slot < OV_BUILTIN_SLOTS) {
-        int free_slot = -1;
-        const char *names[OV_SLOTS];
-        size_t n = 0;
-        for (int i = 0; i < OV_SLOTS; i++) {
-            if (s.ovs[i].used) {
-                names[n++] = s.ovs[i].name;
-            } else if (i >= OV_BUILTIN_SLOTS && free_slot < 0) {
-                free_slot = i;
-            }
-        }
-        if (free_slot < 0) {
-            /* ACK with "no free slot": values stay those of the built-in preset */
-            s.led_notice = UI_LED_NOTICE_NO_FREE_SLOT;
-            s.notice_until_ms = s.t_ms + NOTICE_MS;
-            printf("[action] overlay: no free user slot\n");
-            return;
-        }
-        overlay_slot_t *copy = &s.ovs[free_slot];
-        up_preset_copy_name(s.ovs[slot].name, names, n, copy->name);
-        copy->used = true;
-        slot = (uint8_t)free_slot;
-        s.active_overlay = slot;
-        s.overlay_list_rev++;
-        printf("[action] overlay: built-in copied to slot %u (%s)\n", slot, copy->name);
+    uint8_t slot;
+    ps_result_t r = preset_ram_dash_set_overlay(o, &slot);
+    if (r == PS_FULL) {
+        /* ACK with "no free slot": values stay those of the built-in preset */
+        s.led_notice = UI_LED_NOTICE_NO_FREE_SLOT;
+        s.notice_until_ms = s.t_ms + NOTICE_MS;
+        printf("[action] overlay: no free user slot\n");
+        return;
     }
-    s.ovs[slot].ov = *o;
-    s.overlay = *o;
     s.led_notice = UI_LED_NOTICE_NONE;
     printf("[action] overlay slot %u: %u/%u/%u %% fades %u/%u mm\n", slot,
            o->level_start, o->level_mid, o->level_end, o->fade_start_mm, o->fade_end_mm);
@@ -330,16 +278,11 @@ static void act_set_overlay(void *ctx, const up_overlay_t *o)
 
 static void act_select_preset(void *ctx, uint8_t category, uint8_t slot)
 {
-    if (category == UI_PRESET_PATTERN) {
-        s.active_pattern = slot;
-        printf("[action] pattern slot %u\n", slot);
-        return;
-    }
-    if (slot < OV_SLOTS && s.ovs[slot].used) {
-        s.overlay = s.ovs[slot].ov;
-        s.active_overlay = slot;
-        s.led_notice = UI_LED_NOTICE_NONE;
-        printf("[action] overlay preset slot %u (%s)\n", slot, s.ovs[slot].name);
+    if (preset_ram_select(category == UI_PRESET_PATTERN ? UP_CAT_PATTERN : UP_CAT_OVERLAY, slot) == PS_OK) {
+        if (category != UI_PRESET_PATTERN) {
+            s.led_notice = UI_LED_NOTICE_NONE;
+        }
+        printf("[action] %s slot %u\n", category == UI_PRESET_PATTERN ? "pattern" : "overlay", slot);
     }
 }
 
