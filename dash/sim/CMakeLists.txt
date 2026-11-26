@@ -51,6 +51,7 @@ add_executable(dash_sim
     ${DASH_DIR}/ui/ui_led.c
     ${DASH_DIR}/ui/ui_settings.c
     ${DASH_DIR}/app/measurement.c
+    ${DASH_DIR}/app/dash_state.c
     ${REPO_DIR}/common/src/up_lights.c
     ${FONT_C})
 

@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-25 (updated 2026-11-25: stopwatch behaviour; two measurements,
-  selectable display resolution)
+  selectable display resolution; updated 2026-11-26: state kept in RAM only)
 
 ## Context
 
@@ -38,8 +38,8 @@ Use option 3.
   - **Stop:** the value is frozen. Distance travelled while stopped (e.g. pushing
     the scooter) is not counted.
   - **Reset:** sets the value to 0 (allowed while running or stopped).
-- dash keeps the state of each measurement and stores it in its own NVS on every
-  button press (and only then):
+- dash keeps the state of each measurement **in RAM only** (not stored, no flash
+  writes); after a restart both measurements are 0 and stopped:
 
   | Field | Type | Meaning |
   |---|---|---|
@@ -52,8 +52,9 @@ Use option 3.
   using unsigned 32-bit arithmetic, so a wrap-around of `total_mm` is handled
   automatically (valid for measurements < 4295 km).
 - On stop: `accumulated_mm += total_mm − start_mm`, `running = false`.
-- If the power fails while running, the measurement continues after restart:
-  `start_mm` and `total_mm` both survive (ADR 0009).
+- A restart or power failure ends the measurements (decided 2026-11-26: a
+  measurement is a short-term tool; not storing it avoids flash writes on every
+  button press).
 - Plausibility check: if `measured` is implausibly large (e.g. core was replaced or
   its NVS was erased, so `total_mm` jumped backwards), dash resets the measurement
   to 0.
@@ -70,10 +71,12 @@ Use option 3.
 ## Consequences
 
 - No new command and no extra state on core. core stays the single source of
-  truth for distance; dash only stores the measurement state (start, stop, sum).
-- The measurement survives power loss on both sides.
+  truth for distance; dash only keeps the measurement state (start, stop, sum)
+  in RAM.
+- A restart of the dash ends the measurements; a restart of core alone does not
+  (`total_mm` survives on core, ADR 0009).
 - Lost frames do not cause errors: every frame carries the absolute value.
-- dash writes to its flash only once per button press (negligible wear).
+- No flash writes for measurements at all.
 - Pushing the scooter or short breaks can be excluded by pressing stop.
 - Further measurements could be added on dash without protocol changes.
 - At 20 Hz and 4 m/s the raw value advances in 20 cm steps; smoothing or a higher

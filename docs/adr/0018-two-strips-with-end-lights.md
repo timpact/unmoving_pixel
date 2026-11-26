@@ -153,8 +153,8 @@ required lighting.
 ### dash GUI
 
 - **Ride screen:** the area of the two distance measurements becomes switchable
-  with a segmented control **"Messung | Licht"** above it (the choice is stored
-  on the dash):
+  with a segmented control **"Messung | Licht"** above it (not stored: after a
+  start "Licht" is shown, updated 2026-11-26):
   - "Messung": the two distance measurements as before (ADR 0008)
   - "Licht": three large buttons "◄ Blinker links", "Warnblinker",
     "Blinker rechts ►", and a switch "Licht"

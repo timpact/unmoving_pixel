@@ -77,7 +77,7 @@ editor, ADR 0013; not needed for riding).
 - Shows speed (smoothed over 200–500 ms), trip and total distance, max speed,
   ride time, battery voltage
 - Distance measurement: stopwatch with start/stop/reset, computed from
-  `total_mm`; only the measurement state is stored in dash NVS (ADR 0008)
+  `total_mm`; the measurement state is kept in RAM only (ADR 0008)
 - GUI written in C with LVGL 9, previewed in a PC simulator on macOS
   (`dash/ui`, `dash/main`, `dash/sim`, ADR 0010). Three screens:
   - Ride: speed, trip/total distance, switchable area: distance measurement

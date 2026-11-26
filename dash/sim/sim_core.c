@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "measurement.h"
 #include "up_lights.h"
 #include "up_preset.h"
 #include "up_strip.h"
@@ -70,10 +69,6 @@ static struct {
     double hyst_anchor;    /* position at which travelled distance was last counted */
     int hyst_dir;          /* current direction for the hysteresis: +1 / -1 */
     uint32_t trip_start_mm;
-    measurement_t meas[UI_MEASURE_COUNT];
-    uint8_t display_brightness;
-    uint8_t measure_decimals;
-    bool measure_add_backward;
     uint8_t brightness;
     up_overlay_t overlay;
     uint8_t active_pattern;
@@ -84,7 +79,6 @@ static struct {
     uint32_t notice_until_ms;
     bool editor_on;
     up_lights_t lights;      /* end lights (ADR 0018), same code as on core */
-    uint8_t ride_panel;
     uint8_t main_leds;
     uint8_t front_leds;
     uint8_t rear_leds;
@@ -144,12 +138,6 @@ static uint32_t position_mm(void)
     return wire(s.pos_mm_f);
 }
 
-/* counter used by the measurements (ADR 0015) */
-static uint32_t measure_counter(void)
-{
-    return s.measure_add_backward ? total_mm() : position_mm();
-}
-
 /* travelled distance with direction hysteresis (ADR 0015) */
 static void update_travelled(void)
 {
@@ -177,8 +165,6 @@ void sim_core_init(const sim_options_t *opt)
     s.front_leds = UP_STRIP_END_DEF;
     s.rear_leds = UP_STRIP_END_DEF;
     s.layout_flags = UP_LAYOUT_LEFT_DATA_FRONT | UP_LAYOUT_RIGHT_DATA_FRONT;
-    s.display_brightness = 70;
-    s.measure_decimals = 2;
     for (size_t i = 0; i < sizeof(k_overlays) / sizeof(k_overlays[0]); i++) {
         overlay_slot_t *o = &s.ovs[k_overlays[i].slot];
         o->used = true;
@@ -235,14 +221,6 @@ void sim_core_fill_model(ui_model_t *m)
     m->trip_m = (tot - s.trip_start_mm) / 1000u;
     m->battery_mv = 7420;
 
-    for (int i = 0; i < UI_MEASURE_COUNT; i++) {
-        m->measure_mm[i] = measurement_value(&s.meas[i], measure_counter(), NULL);
-        m->measure_running[i] = s.meas[i].running;
-    }
-    m->display_brightness = s.display_brightness;
-    m->measure_decimals = s.measure_decimals;
-    m->measure_add_backward = s.measure_add_backward;
-
     m->global_brightness = s.brightness;
     m->overlay = s.overlay;
     m->active_pattern = s.active_pattern;
@@ -257,7 +235,6 @@ void sim_core_fill_model(ui_model_t *m)
     m->light_brightness = s.lights.light_brightness;
     m->brake_enabled = s.lights.brake_enabled;
     m->brake_threshold = s.lights.brake_threshold;
-    m->ride_panel = s.ride_panel;
 
     m->patterns.rev = 1;
     m->patterns.count = sizeof(k_patterns) / sizeof(k_patterns[0]);
@@ -294,55 +271,18 @@ void sim_core_fill_model(ui_model_t *m)
     snprintf(m->editor_url, sizeof(m->editor_url), "http://192.168.4.1");
 }
 
+void sim_core_counters(uint32_t *total, uint32_t *position)
+{
+    *total = total_mm();
+    *position = position_mm();
+}
+
 void sim_core_set_editor(bool on)
 {
     s.editor_on = on;
 }
 
 /* ---- GUI actions -------------------------------------------------------- */
-
-static void act_measure_start(void *ctx, uint8_t i)
-{
-    measurement_start(&s.meas[i], measure_counter());
-    printf("[action] measurement %u start\n", i + 1);
-}
-
-static void act_measure_stop(void *ctx, uint8_t i)
-{
-    measurement_stop(&s.meas[i], measure_counter());
-    printf("[action] measurement %u stop\n", i + 1);
-}
-
-static void act_measure_reset(void *ctx, uint8_t i)
-{
-    measurement_reset(&s.meas[i], measure_counter());
-    printf("[action] measurement %u reset\n", i + 1);
-}
-
-static void act_set_measure_add_backward(void *ctx, bool add)
-{
-    if (add == s.measure_add_backward) {
-        return;
-    }
-    uint32_t old_counter = measure_counter();
-    s.measure_add_backward = add;
-    for (int i = 0; i < UI_MEASURE_COUNT; i++) {
-        measurement_switch_counter(&s.meas[i], old_counter, measure_counter());
-    }
-    printf("[action] measurements: backward travel %s\n", add ? "added" : "subtracted");
-}
-
-static void act_set_display_brightness(void *ctx, uint8_t percent)
-{
-    s.display_brightness = percent;
-    printf("[action] display brightness %u %%\n", percent);
-}
-
-static void act_set_measure_decimals(void *ctx, uint8_t decimals)
-{
-    s.measure_decimals = decimals;
-    printf("[action] measurement resolution: %u decimals\n", decimals);
-}
 
 static void act_set_brightness(void *ctx, uint8_t percent)
 {
@@ -459,12 +399,6 @@ static void act_set_time(void *ctx, uint32_t t)
 
 /* ---- ADR 0018 ---------------------------------------------------------------- */
 
-static void act_set_ride_panel(void *ctx, uint8_t panel)
-{
-    s.ride_panel = panel;
-    printf("[action] ride panel %s\n", panel == UI_RIDE_PANEL_LIGHTS ? "lights" : "measurement");
-}
-
 static void act_set_signal(void *ctx, uint8_t signal)
 {
     static const char *const names[] = {"off", "left", "right", "hazard"};
@@ -496,12 +430,6 @@ static void act_set_light_settings(void *ctx, uint8_t brightness, bool brake_ena
 
 const ui_actions_t sim_core_actions = {
     .ctx = NULL,
-    .measure_start = act_measure_start,
-    .measure_stop = act_measure_stop,
-    .measure_reset = act_measure_reset,
-    .set_display_brightness = act_set_display_brightness,
-    .set_measure_decimals = act_set_measure_decimals,
-    .set_measure_add_backward = act_set_measure_add_backward,
     .set_brightness = act_set_brightness,
     .set_overlay = act_set_overlay,
     .select_preset = act_select_preset,
@@ -511,7 +439,6 @@ const ui_actions_t sim_core_actions = {
     .calib_apply = act_calib_apply,
     .calib_discard = act_calib_discard,
     .set_time = act_set_time,
-    .set_ride_panel = act_set_ride_panel,
     .set_signal = act_set_signal,
     .set_light = act_set_light,
     .set_strip_layout = act_set_strip_layout,

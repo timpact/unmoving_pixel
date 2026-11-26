@@ -1,7 +1,8 @@
 /*
  * dash firmware (ADR 0019): display, touch and the GUI from dash/ui.
  *
- * Model source:
+ * Model: dash_state (dash settings in NVS, measurements, ride panel) plus the
+ * core part from:
  *   DASH_DEMO_CORE (menuconfig, default on until the UART link exists): the
  *   simulated core of the PC simulator plays back the test ride, so the GUI can
  *   be looked at on the device without core.
@@ -14,6 +15,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "dash_state.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_heap_caps.h"
@@ -25,6 +27,7 @@
 #include "lvgl.h"
 #include "lvgl_port.h"
 #include "sdkconfig.h"
+#include "settings.h"
 #include "ui.h"
 
 #if CONFIG_DASH_DEMO_CORE
@@ -40,6 +43,28 @@ extern const uint8_t font_ttf_start[] asm("_binary_Montserrat_Medium_ttf_start")
 extern const uint8_t font_ttf_end[] asm("_binary_Montserrat_Medium_ttf_end");
 
 static ui_model_t s_model;
+static ui_actions_t s_actions;   /* core actions + dash-owned actions (dash_state) */
+
+static uint32_t now_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+/* one model update: core part, then the dash-owned part */
+static void model_update(uint32_t dt_ms)
+{
+    uint32_t total = 0, position = 0;
+#if CONFIG_DASH_DEMO_CORE
+    sim_core_step(dt_ms);
+    sim_core_counters(&total, &position);
+    sim_core_fill_model(&s_model);
+#else
+    (void)dt_ms;   /* UART link (ADR 0019, step 5) */
+#endif
+    dash_state_update(now_ms(), total, position);
+    dash_state_fill_model(&s_model);
+    ui_update(&s_model);
+}
 
 typedef struct {
     esp_lcd_panel_handle_t panel;
@@ -57,27 +82,28 @@ static void gui_task(void *arg)
         return;
     }
 
+    dash_state_init(settings_store());
 #if CONFIG_DASH_DEMO_CORE
     sim_options_t opt = {0};
     sim_core_init(&opt);
-    ui_init(&sim_core_actions, font_ttf_start, (size_t)(font_ttf_end - font_ttf_start));
+    dash_state_actions(&s_actions, &sim_core_actions);
     ESP_LOGI(TAG, "GUI running with the demo core (simulated test ride)");
 #else
-    static const ui_actions_t no_actions = {0};
-    ui_init(&no_actions, font_ttf_start, (size_t)(font_ttf_end - font_ttf_start));
+    static const ui_actions_t no_core = {0};
+    dash_state_actions(&s_actions, &no_core);
 #endif
+    ui_init(&s_actions, font_ttf_start, (size_t)(font_ttf_end - font_ttf_start));
 
 #if CONFIG_DASH_BENCH_SCROLL
 #if CONFIG_DASH_DEMO_CORE && CONFIG_DASH_BENCH_MEASURE
     /* reproduce: start a distance measurement on the ride page, run, stop, reset */
     ui_show_tab(UI_TAB_RIDE);
     for (int i = 0; i < 100; i++) {   /* 2 s */
-        if (i == 10) sim_core_actions.measure_start(NULL, 0);
-        if (i == 80) sim_core_actions.measure_stop(NULL, 0);
-        if (i == 90) sim_core_actions.measure_reset(NULL, 0);
-        sim_core_step(20);
-        sim_core_fill_model(&s_model);
-        ui_update(&s_model);
+        if (i == 0) s_actions.set_ride_panel(NULL, UI_RIDE_PANEL_MEASURE);
+        if (i == 10) s_actions.measure_start(NULL, 0);
+        if (i == 80) s_actions.measure_stop(NULL, 0);
+        if (i == 90) s_actions.measure_reset(NULL, 0);
+        model_update(20);
         lv_timer_handler();
         vTaskDelay(pdMS_TO_TICKS(20));
     }
@@ -95,11 +121,7 @@ static void gui_task(void *arg)
     while (true) {
         if ((int32_t)(xTaskGetTickCount() - next_model) >= 0) {
             next_model += pdMS_TO_TICKS(MODEL_PERIOD_MS);
-#if CONFIG_DASH_DEMO_CORE
-            sim_core_step(MODEL_PERIOD_MS);
-            sim_core_fill_model(&s_model);
-#endif
-            ui_update(&s_model);
+            model_update(MODEL_PERIOD_MS);
             if (s_model.display_brightness != backlight) {   /* dash setting (ADR 0010) */
                 backlight = s_model.display_brightness;
                 board_backlight_set(backlight);

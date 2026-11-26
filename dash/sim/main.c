@@ -19,6 +19,7 @@
 #include "check.h"
 #include "headless.h"
 #include "lvgl.h"
+#include "dash_state.h"
 #include "sim_core.h"
 #include "ui.h"
 
@@ -28,6 +29,8 @@ extern const unsigned char ui_font_data[];
 extern const unsigned long ui_font_data_size;
 
 static ui_model_t s_model;
+static ui_actions_t s_actions;   /* core actions (sim_core) + dash-owned (dash_state) */
+static uint32_t s_now_ms;
 
 static void snapshot(const char *dir, const char *name)
 {
@@ -38,8 +41,13 @@ static void snapshot(const char *dir, const char *name)
 
 static void model_tick(void)
 {
+    uint32_t total, position;
     sim_core_step(MODEL_PERIOD_MS);
+    s_now_ms += MODEL_PERIOD_MS;
+    sim_core_counters(&total, &position);
+    dash_state_update(s_now_ms, total, position);
     sim_core_fill_model(&s_model);
+    dash_state_fill_model(&s_model);
     ui_update(&s_model);
 }
 
@@ -47,14 +55,17 @@ static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
 {
     headless_init();
 
-    ui_init(&sim_core_actions, ui_font_data, ui_font_data_size);
+    ui_init(&s_actions, ui_font_data, ui_font_data_size);
 
     for (uint32_t t = 0; t < sim_ms; t += MODEL_PERIOD_MS) {
+        if (measure && t == 0) {
+            s_actions.set_ride_panel(NULL, UI_RIDE_PANEL_MEASURE);
+        }
         if (measure && t == 5000u) {
-            sim_core_actions.measure_start(NULL, 0);
+            s_actions.measure_start(NULL, 0);
         }
         if (measure && t == 12000u) {
-            sim_core_actions.measure_start(NULL, 1);
+            s_actions.measure_start(NULL, 1);
         }
         model_tick();
         headless_run(MODEL_PERIOD_MS);
@@ -76,13 +87,13 @@ static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
     snapshot(dir, "settings");
 
     /* Calibration: test ride for 4 s, then stop */
-    sim_core_actions.calib_start(NULL);
+    s_actions.calib_start(NULL);
     for (int i = 0; i < 80; i++) {
         model_tick();
         headless_run(MODEL_PERIOD_MS);
     }
     snapshot(dir, "calib_counting");
-    sim_core_actions.calib_stop(NULL);
+    s_actions.calib_stop(NULL);
     model_tick();
     snapshot(dir, "calib_input");
 
@@ -94,8 +105,8 @@ static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
     ui_calib_test_input("1520", false);
 
     /* Apply a reference of 15 m (the simulated ride was ~15.2 m) and set the clock */
-    sim_core_actions.set_time(NULL, 1795000000u);
-    sim_core_actions.calib_apply(NULL, 1520);
+    s_actions.set_time(NULL, 1795000000u);
+    s_actions.calib_apply(NULL, 1520);
     model_tick();
     snapshot(dir, "settings_after_calib");
     return 0;
@@ -115,7 +126,7 @@ static int run_window(float zoom)
     }
     lv_sdl_mouse_create();
 
-    ui_init(&sim_core_actions, ui_font_data, ui_font_data_size);
+    ui_init(&s_actions, ui_font_data, ui_font_data_size);
 
     uint32_t last = lv_tick_get();
     uint32_t acc = 0;
@@ -172,6 +183,8 @@ int main(int argc, char **argv)
         return check_run(update_refs);
     }
     sim_core_init(&opt);
+    dash_state_init(NULL);   /* settings in RAM only */
+    dash_state_actions(&s_actions, &sim_core_actions);
 
     return shot_dir ? run_headless(shot_dir, sim_ms, measure) : run_window(zoom);
 }

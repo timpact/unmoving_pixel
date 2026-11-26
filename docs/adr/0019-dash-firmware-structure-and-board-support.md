@@ -43,8 +43,7 @@ dash/main/
 ├── board.c/.h      display, backlight, touch (this ADR)
 ├── lvgl_port.c/.h  LVGL display and input driver on top of board.c
 ├── link.c/.h       UART1 + up_proto (common/): STATUS/SETTINGS → model, commands with seq/ACK/retry
-├── settings.c/.h   dash NVS: display brightness, measurements (ADR 0008), measurement settings,
-│                   ride panel (ADR 0018)
+├── settings.c/.h   dash NVS storage for dash/app/dash_state (see "NVS on the dash")
 └── main.c          start-up, model update loop
 ```
 
@@ -138,17 +137,41 @@ dash/main/
   be looked at on the device.
 - **Link loss:** no valid frame for 500 ms → `link_ok = false`, the GUI shows "--"
   (ADR 0004).
-- **NVS on the dash:** written only on user changes (debounced 2 s, like core)
-  and for the measurement state (ADR 0008). Time is not stored (no RTC, ADR 0014).
+- **NVS on the dash** (added 2026-11-26): only the dash settings, written 2 s
+  after the last change (like core):
+
+  | Key | Value | Default |
+  |---|---|---|
+  | `disp_bright` | display brightness, 5 … 100 % | 70 |
+  | `meas_dec` | measurement resolution, 0 … 2 decimals of a metre | 2 (1 cm) |
+  | `meas_add_bw` | backward travel added (1) or subtracted (0), ADR 0015 | 0 |
+  | `wifi_pw` | Wi-Fi password, generated once (ADR 0013) | comes with the editor |
+
+  - Namespace `dash`, one key per value. A missing key or a value out of range
+    gives the default, so settings can be added later without a format version.
+  - Not stored: the distance measurements (RAM only, ADR 0008), the ride panel
+    "Messung | Licht" (starts with "Licht", ADR 0018), the switching states of
+    the lights (ADR 0018) and the time (no RTC, ADR 0014).
+  - Code: the dash-owned state (settings, measurements, ride panel) lives in
+    `dash/app/dash_state.c`, platform-independent, with the defaults and value
+    ranges. Loading and saving go through two functions passed in by the caller:
+    NVS on the device (`dash/main/settings.c`), RAM in the PC simulator. The
+    demo core (`sim_core.c`) then only provides what core will send over UART.
+  - Until the dash partition table is defined together with the editor (it needs
+    a partition for the web files), the NVS partition (24 KB) of the interim
+    table is used. If its position or size changes, the settings fall back to
+    the defaults once.
 
 ### Order of work
 
 1. Board support (done, verified)
 2. LVGL port with the GUI in demo mode
 3. Settings in NVS
-4. UART link with the protocol (testable against a minimal protocol responder on
+4. Wi-Fi editor (ADR 0013): check the C6 firmware first, then the dash partition
+   table. Until the UART link exists, the editor works against the demo core
+   (presets kept in dash RAM), like the mock dash of the dev server.
+5. UART link with the protocol (testable against a minimal protocol responder on
    the S3 before the real core firmware exists)
-5. Wi-Fi editor (ADR 0013) later, after the C6 firmware check
 
 ## Consequences
 

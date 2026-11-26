@@ -3,6 +3,8 @@
  *
  * Plays back a test ride (speed profile, distances) and keeps the LED settings
  * and preset lists that the real core would report over UART (ADR 0004).
+ * The dash-owned state (settings, measurements, ride panel) is in
+ * dash/app/dash_state, not here.
  */
 #ifndef SIM_CORE_H
 #define SIM_CORE_H
@@ -23,7 +25,10 @@ void sim_core_init(const sim_options_t *opt);
 void sim_core_step(uint32_t dt_ms);
 void sim_core_fill_model(ui_model_t *model);
 
-/* GUI actions (ui_actions_t callbacks) */
+/* Counters of the status frame (ADR 0004, 0015) */
+void sim_core_counters(uint32_t *total_mm, uint32_t *position_mm);
+
+/* GUI actions of core (ui_actions_t callbacks); combine with dash_state_actions() */
 extern const ui_actions_t sim_core_actions;
 
 /* Force the editor on (for screenshots) */
