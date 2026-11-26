@@ -1,7 +1,8 @@
 # ADR 0017: Preset editor – functions and interaction
 
 - Status: Accepted
-- Date: 2026-11-26 (updated 2026-11-26: local mode via dev server, gradient with up to 4 colours)
+- Date: 2026-11-26 (updated 2026-11-26: local mode via dev server, gradient with up to 4 colours;
+  strip length from the dash settings, ADR 0018)
 
 ## Context
 
@@ -34,7 +35,7 @@ Patterns and overlays, both in the same editor (two tabs: "Muster", "Overlays").
 │ (built-in 🔒, │ Gesamtlänge 3,60 m   [Am Strip testen] [Speichern] │ properties    │
 │  user, free) │──────────────────────────────────────────────│ (bulk edit)   │
 │              │ Ground view: whole pattern, proportional      │               │
-│ New          │ Strip preview: 72 LEDs, animated ride         │ Tools         │
+│ New          │ Strip preview: main part, animated ride       │ Tools         │
 │ Duplicate    │──────────────────────────────────────────────│ (every n-th,  │
 │ Delete       │ Segment table: # | length cm | colour | %     │  gradient,    │
 │ Import/Export│                                              │  repeat, …)   │
@@ -55,7 +56,8 @@ Details and sizes: `docs/editor-guidelines.md`.
   picker + hex), brightness (%). Values can be edited directly in the table.
 - **Ground view:** the whole pattern drawn proportionally as a band (zoomable,
   horizontally scrollable for long patterns); segments can be selected there too.
-- **Strip preview:** 72 LEDs at 6.94 mm pitch with the selected overlay, animated
+- **Strip preview:** the main part of the strip (LED count from `GET /api/settings`,
+  72 LEDs in local mode, ADR 0018) at 6.94 mm pitch with the selected overlay, animated
   as a ride at adjustable speed. It uses the same rendering as core (box filter,
   ADR 0011), so the preview matches the strip.
 
@@ -96,7 +98,7 @@ rejected with a message.
 ### Overlays
 
 - Name, five parameters (levels at start, middle and end; fade lengths at start
-  and end) as slider plus number field, curve plot over the 72 LEDs, and the
+  and end) as slider plus number field, curve plot over the LEDs of the main part, and the
   strip preview with a selectable pattern.
 - Same save, undo and preset-list behaviour as for patterns.
 

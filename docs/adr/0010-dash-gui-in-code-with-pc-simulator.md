@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-25 (updated 2026-11-25: settings screen, code structure and
-  fonts after the first simulator tests)
+  fonts after the first simulator tests; 2026-11-26: lights on the ride screen,
+  strip and light settings, ADR 0018)
 
 ## Context
 
@@ -83,7 +84,12 @@ Three screens, switched by swiping or by tabs (icon above text) at the bottom:
      (ticks at every km/h, numbers at 0, 5, 10, 15); the decimal is shown at
      60 % size in grey so it does not distract
    - Trip and total distance directly below the gauge
-   - Two distance measurements (ADR 0008), each with start/stop and reset
+   - Switchable area "Messung | Licht" (ADR 0018):
+     - "Messung": two distance measurements (ADR 0008), each with start/stop
+       and reset
+     - "Licht": buttons for turn signal left, hazard lights, turn signal right,
+       and a switch for the light
+   - Turn signal indicator near the speed, always visible while a signal is on
    - Link state and battery voltage; "--" when no valid frame for 500 ms
      (ADR 0004)
 2. **LED**
@@ -101,6 +107,9 @@ Three screens, switched by swiping or by tabs (icon above text) at the bottom:
    - Backward travel in distance measurements: subtract or add (ADR 0015)
    - Encoder calibration by test ride, with history (ADR 0014)
    - Date and time (manual entry, ADR 0014)
+   - LED strips: main part length in LEDs, LEDs at the front and rear ends, data
+     direction per strip (ADR 0018)
+   - Light: light brightness, brake light on/off, brake threshold (ADR 0018)
 
 Further content (e.g. diagnostics such as the NVS write counter) can be added
 without changing this structure.

@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-25 (updated 2026-11-25: profile redefined as strip overlay;
-  2026-11-26: dash sliders write into the overlay preset, ADR 0017)
+  2026-11-26: dash sliders write into the overlay preset, ADR 0017;
+  overlay length = main part length, ADR 0018)
 
 ## Context
 
@@ -51,8 +52,11 @@ Parameters:
 | fade_start_mm | uint16 | length of the S-curve at the start of the strip |
 | fade_end_mm | uint16 | length of the S-curve at the end of the strip |
 
-`fade_start_mm + fade_end_mm ≤ strip length`. If both are half the strip
-length, there is no flat middle section.
+The strip length `L` is the length of the main part (`main_leds × 6.94 mm`,
+ADR 0018); the end lights are not affected by the overlay. Each fade length is
+0 … 1000 mm (maximum main part length) and `fade_start_mm + fade_end_mm ≤ 1000`.
+If the sum exceeds the configured `L`, both fades are scaled down proportionally.
+If both are half the strip length, there is no flat middle section.
 
 For an LED at strip position `s` (0 … strip length `L`):
 
@@ -95,9 +99,10 @@ active.
   current setting and the 8-bit PWM values, using the highest PWM range
   possible. This keeps colour resolution at low brightness and avoids visible
   steps when dimming.
-- **Current limit:** core estimates the strip current from the frame data and
-  scales the brightness down if a configurable limit is exceeded (protects the
-  power supply; limit to be set once the supply is chosen).
+- **Current limit:** core estimates the current of both strips from the frame
+  data and scales the pattern brightness down if a configurable limit is
+  exceeded (protects the power supply; limit to be set once the supply is
+  chosen). The end lights (ADR 0018) are not dimmed by the limit.
 
 ### Settings handling
 

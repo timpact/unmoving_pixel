@@ -2,9 +2,11 @@
 
 ## Purpose
 
-An LED strip (~0.5 m) is mounted lengthwise on a kick scooter. The pattern on the strip
-is shifted by the distance travelled, so it appears fixed to the ground while the
-scooter moves ("unmoving plaid" effect). A rotary encoder on the rear wheel measures
+Two LED strips (~0.5–0.7 m, left and right) are mounted lengthwise on a kick scooter,
+facing the ground. The pattern on the strips is shifted by the distance travelled, so it
+appears fixed to the ground while the scooter moves ("unmoving plaid" effect). The ends
+of both strips are bent up by 90° and serve as turn signals, hazard lights, brake light
+and front/tail light (ADR 0018). A rotary encoder on the rear wheel measures
 the distance. A dashboard display on the handlebar shows speed and distance.
 
 Target speed: up to 4 m/s.
@@ -20,12 +22,12 @@ Target speed: up to 4 m/s.
  │ - LED output (SPI)   │                  │ - touch controls     │
  │ - odometer (NVS)     │                  │                      │
  └───┬─────────────┬────┘                  └──────────────────────┘
-     │ few cm      │ few cm
- ┌───┴─────┐  ┌────┴──────────┐
- │ encoder │  │ LED strip     │
- │ (rear   │  │ ~0.5 m        │
- │  wheel) │  │               │
- └─────────┘  └───────────────┘
+     │ few cm      │ SPI2 / SPI3, few cm
+ ┌───┴─────┐  ┌────┴──────────────────────────────┐
+ │ encoder │  │ LED strips left + right            │
+ │ (rear   │  │ front end │ main part │ rear end   │
+ │  wheel) │  │ (lights)  │ (pattern) │ (lights)   │
+ └─────────┘  └───────────────────────────────────┘
 ```
 
 ## Components
@@ -37,7 +39,9 @@ Real-time part. Mounted next to the encoder and the LED strip with short wires
 
 - Encoder via the hardware pulse counter (PCNT): quadrature x4, glitch filter
   100 ns–1 µs, `accum_count` enabled (counter is 16-bit)
-- LED output: SK9822 via hardware SPI with DMA (ADR 0003)
+- LED output: two SK9822 strips (left, right), each on its own hardware SPI bus
+  with DMA, started in the same frame (ADR 0003, 0018). Main part 36 … 144 LEDs,
+  0 … 8 LEDs per end, set on the dash and stored on core
 - Render loop: position from encoder → pattern offset → sub-pixel rendering
   → output; latency kept short (< 1 ms) and constant (ADR 0003); optional
   compensation `offset += v × latency` with smoothed speed
@@ -49,6 +53,10 @@ Real-time part. Mounted next to the encoder and the LED strip with short wires
   levels at start/middle/end and fade lengths; factor 0…1 per LED (ADR 0012)
 - Brightness per LED: pattern × overlay × global, split into SK9822 5-bit
   current and 8-bit PWM, current limit (ADR 0012)
+- End lights (ADR 0018), all transitions smooth (S-curves, brake light rises over
+  ~100 ms): turn signals and hazard lights (1.5 Hz, auto-off after
+  30 s or 10 m), brake light from the core's own deceleration measurement, white
+  front light and red tail light; switching states are not stored
 - Presets (patterns, overlays) and LED settings stored in a separate NVS
   partition `cfg`; built-in presets compiled from `presets/` in the repository;
   settings saved 2 s after the last change (ADR 0011–0013)
@@ -71,10 +79,14 @@ editor, ADR 0013; not needed for riding).
 - Distance measurement: stopwatch with start/stop/reset, computed from
   `total_mm`; only the measurement state is stored in dash NVS (ADR 0008)
 - GUI written in C with LVGL 9, previewed in a PC simulator on macOS
-  (`dash/ui`, `dash/main`, `dash/sim`, ADR 0010). Two screens:
-  - Ride: speed, trip/total distance, distance measurement (start/stop/reset)
+  (`dash/ui`, `dash/main`, `dash/sim`, ADR 0010). Three screens:
+  - Ride: speed, trip/total distance, switchable area: distance measurement
+    (start/stop/reset) or lights (turn signals, hazard lights, light on/off),
+    turn signal indicator (ADR 0018)
   - LED: global brightness, pattern list, overlay list and overlay sliders,
     Wi-Fi editor on/off
+  - Settings: display brightness, measurement display, calibration, date and
+    time, strip layout and light settings (ADR 0018)
 - Preset editor: on demand, dash opens a Wi-Fi access point and serves a web
   editor for patterns and overlays; presets are validated and forwarded to core
   over UART (ADR 0013)
@@ -94,12 +106,13 @@ firmwares.
 
 | Item | Value |
 |---|---|
-| LED strip | SK9822, 144 LEDs/m, pitch ~6.94 mm |
-| LEDs on 0.5 m | 72 |
+| LED strips | 2 × SK9822, 144 LEDs/m, pitch ~6.94 mm, one SPI bus each |
+| LEDs per strip | main part 36 … 144 (72 on 0.5 m) + 0 … 8 per end (ADR 0018) |
 | Stutter per frame | v / fps |
 | Target speed | 4 m/s |
 | WS2812B, 125 LEDs (4 mm, for comparison) | ~245 fps → ~16 mm at 4 m/s |
 | SK9822, 72 LEDs, 10 MHz SPI | ~4000 fps → ~1 mm at 4 m/s |
+| SK9822, 160 LEDs per strip (maximum), 10 MHz SPI | ~1900 fps → ~2.1 mm at 4 m/s |
 | Latency at 4 m/s | 1 ms ≙ 4 mm shift; constant shift is invisible, jitter is visible → keep latency constant |
 | Encoder resolution | ≥ 1 count per 4 mm of travel (finer than the LED pitch) |
 | Encoder shaft at 4 m/s (10:1, ~200 mm wheel) | ~3800 rpm |
@@ -133,11 +146,14 @@ See [`adr/`](adr/).
 | [0015](adr/0015-direction-of-travel.md) | Direction of travel | Accepted |
 | [0016](adr/0016-gui-guidelines-and-automated-checks.md) | GUI guidelines and automated GUI checks | Accepted |
 | [0017](adr/0017-preset-editor-functions.md) | Preset editor – functions and interaction | Accepted |
+| [0018](adr/0018-two-strips-with-end-lights.md) | Two LED strips with end lights | Accepted |
 
 ## Open points
 
 - Measure wheel diameter; choose encoder model (≥ 5000 rpm) and gear ratio
-- Power supply (5 V, several A for the strip); sets the LED current limit (ADR 0012)
+- Power supply (5 V, several A for both strips and the end lights); sets the LED
+  current limit (ADR 0012, 0018)
+- Final strip length and number of end LEDs (set on the dash once mounted, ADR 0018)
 - core partition table: add NVS partition `cfg` (512 KB) for settings and presets
 - dash partition table: NVS, app, web editor files (ADR 0013)
 - ESP32-C6: check ESP-Hosted firmware version, update if needed (ADR 0013)

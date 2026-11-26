@@ -1,7 +1,8 @@
 # ADR 0003: Clocked LEDs (SK9822), 144 LEDs/m
 
 - Status: Accepted
-- Date: 2026-11-24 (updated 2026-11-25: 144 LEDs/m strip ordered)
+- Date: 2026-11-24 (updated 2026-11-25: 144 LEDs/m strip ordered;
+  2026-11-26: two strips on two SPI buses, length configurable, ADR 0018)
 
 ## Context
 
@@ -40,6 +41,12 @@ SK9822 strips with 4 mm pitch are hard to get; 144 LEDs/m is widely available.
 
 Use **SK9822** LEDs with **144 LEDs/m** (pitch ~6.94 mm, 72 LEDs on 0.5 m), driven
 by hardware SPI (with DMA) on the ESP32-S3.
+
+Since ADR 0018 there are two strips (left and right), each on its own SPI bus
+(SPI2, SPI3) with DMA, both started in the same frame. The main part length
+(36 … 144 LEDs) and the end lights (0 … 8 LEDs per end) are set on the dash. The
+frame rate depends on the LEDs per strip: ~3700 fps for 72 + 2 × 4 LEDs, ~1900 fps
+at the maximum of 160 LEDs (stutter ~2.1 mm at 4 m/s, still well below the pitch).
 
 APA102 and HD107S were also considered. SK9822 was chosen because its 5-bit global
 brightness adjusts the drive current instead of adding a second, slow PWM stage

@@ -3,13 +3,14 @@
 - Status: Accepted
 - Date: 2026-11-25 (updated 2026-11-25: segments with colour and brightness,
   lengths in cm, up to 2048 segments, no global colour; transitions moved to the
-  overlay, ADR 0012)
+  overlay, ADR 0012; 2026-11-26: two strips, main part length configurable, ADR 0018)
 
 ## Context
 
 The LED strip shows a pattern that is fixed to the ground (ADR 0003): the scooter
-moves over a virtual "carpet" of colour, and the strip shows the 0.5 m window of
-it that is currently under the scooter. Requirements:
+moves over a virtual "carpet" of colour, and the strip shows the window of it
+that is currently under the scooter (main part of each strip, 0.5 m by default,
+36 … 144 LEDs set on the dash; both strips show the same window, ADR 0018). Requirements:
 
 - There is only one kind of pattern: a user-defined (or built-in) sequence that
   repeats endlessly along the ground after its end.
@@ -76,7 +77,8 @@ Pattern header (23 bytes):
 
 ### Rendering on core
 
-For each frame and each LED `i`:
+For each frame and each LED `i` of the main part (computed once, used for both
+strips, ADR 0018):
 
 1. Ground position of the LED: `x = offset + i × pitch` (offset from the encoder,
    optionally with latency compensation, ADR 0003).

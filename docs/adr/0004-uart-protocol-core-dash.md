@@ -1,7 +1,8 @@
 # ADR 0004: UART protocol between core and dash
 
 - Status: Accepted
-- Date: 2026-11-24 (updated 2026-11-25: full message catalogue)
+- Date: 2026-11-24 (updated 2026-11-25: full message catalogue;
+  2026-11-26: lights and strip layout, ADR 0018)
 
 ## Context
 
@@ -38,7 +39,7 @@ sent by core, 0x80–0xFF by dash.
 
 | Type | Name | When | Payload |
 |---|---|---|---|
-| 0x01 | STATUS | every 50 ms | see below (27 bytes) |
+| 0x01 | STATUS | every 50 ms | see below (28 bytes) |
 | 0x02 | SETTINGS | at start, on every change, on request | see below |
 | 0x03 | PRESET_LIST | on request | `category`, `index`, `count`, then up to 10 entries |
 | 0x04 | PRESET_HEADER | on request (GET_PRESET) | `category`, `slot`, preset header |
@@ -60,6 +61,7 @@ STATUS payload:
 | error_bits | uint16 | error flags |
 | battery | uint16 | mV |
 | nvs_writes | uint32 | odometer write counter (ADR 0009) |
+| lights | uint8 | bits 0–1 signal (0 off, 1 left, 2 right, 3 hazard), bit 2 blink phase on, bit 3 brake light on, bit 4 light on (ADR 0018) |
 
 SETTINGS payload:
 
@@ -71,6 +73,14 @@ SETTINGS payload:
 | active_pattern | uint8 | active pattern slot |
 | active_overlay | uint8 | active overlay preset slot (ADR 0012, 0017) |
 | preset_list_rev | uint16 | incremented whenever presets are stored or deleted |
+| main_leds | uint8 | LEDs of the main part, 36 … 144 (ADR 0018) |
+| front_leds | uint8 | LEDs of the front end, 0 … 8 |
+| rear_leds | uint8 | LEDs of the rear end, 0 … 8 |
+| layout_flags | uint8 | bit 0: left strip data input at the front, bit 1: right strip data input at the front |
+| light_on | uint8 | 0 off, 1 on (not stored, ADR 0018) |
+| light_brightness | uint8 | 10 … 100 % |
+| brake_flags | uint8 | bit 0: brake light enabled |
+| brake_threshold | uint8 | deceleration threshold in 0.1 m/s², 5 … 30 |
 
 Preset categories: 0 = pattern (ADR 0011), 1 = overlay (ADR 0012).
 
@@ -107,6 +117,10 @@ ACK carrying the same `seq`.
 | 0x8F | CALIB_APPLY | `ref_cm` (uint32), `timestamp` (uint32, Unix time, 0 = unknown) |
 | 0x90 | CALIB_DISCARD | – |
 | 0x91 | GET_CALIB_HISTORY | – |
+| 0x92 | SET_SIGNAL | uint8: 0 off, 1 left, 2 right, 3 hazard (ADR 0018) |
+| 0x93 | SET_LIGHT | uint8: 0 off, 1 on |
+| 0x94 | SET_STRIP_LAYOUT | `main_leds`, `front_leds`, `rear_leds`, `layout_flags` (uint8 each) |
+| 0x95 | SET_LIGHT_SETTINGS | `light_brightness`, `brake_flags`, `brake_threshold` (uint8 each) |
 
 #### Reliability
 
@@ -117,7 +131,7 @@ ACK carrying the same `seq`.
   typical pattern with a few dozen segments well below 0.1 s.
 - STATUS frames continue during preset transfers.
 - Slider commands are rate-limited on the dash (≤ 20/s, ADR 0012).
-- Link load: STATUS frame = 33 bytes; at 20 Hz ≈ 6.6 kbit/s (~6 % of 115200 baud);
+- Link load: STATUS frame = 34 bytes; at 20 Hz ≈ 6.8 kbit/s (~6 % of 115200 baud);
   commands and preset transfers are short bursts.
 
 ### Ownership and failure behaviour
