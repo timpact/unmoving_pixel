@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-25 (updated 2026-11-25: overlays as second preset category,
-  presets in the repository)
+  presets in the repository; updated 2026-11-26: Wi-Fi, serving and
+  implementation details)
 
 ## Context
 
@@ -69,6 +70,31 @@ presets/
 - The dash shows SSID, password and URL as text and as QR code (LVGL QR widget).
 - The password is generated once, stored in dash NVS, and can be regenerated on
   the dash.
+- Details (added 2026-11-26):
+
+  | Item | Decision |
+  |---|---|
+  | SSID | fixed `unmoving-pixel` |
+  | Password | 12 characters in groups of three, e.g. `k7q-29v-mn4-x8d`: lowercase letters and digits without 0/o and 1/l (~60 bit), from the hardware random number generator |
+  | Storage | NVS key `wifi_pw` (ADR 0019), generated when Wi-Fi is switched on the first time; "Neues Passwort" in the editor area of the LED screen generates a new one and restarts Wi-Fi |
+  | Security | WPA2/WPA3 mixed mode |
+  | Address | `http://192.168.4.1`, no mDNS (`.local` often fails on Android) |
+  | Channel, clients | channel 6, at most 2 clients (e.g. phone and laptop) |
+
+  - The QR code joins the network (`WIFI:T:WPA;S:…;P:…;;`); SSID, password and
+    URL are shown as text below it. No second QR code for the URL.
+  - **No captive portal:** iOS would open the editor in its captive portal
+    sheet, where export downloads do not work and local storage is lost. The
+    URL is typed once in the normal browser instead.
+  - **Auto-off:** Wi-Fi switches off 10 min after the last HTTP request; every
+    request counts, including the polling of `/api/state` (ADR 0017). As long as
+    the editor is open in a browser, Wi-Fi stays on; whether a background tab
+    keeps polling depends on the browser. The editor area shows the number of
+    connected clients and, during the last 2 min, the time left.
+  - **C6:** ESP-Hosted is initialised in the background at dash start (the GUI
+    does not wait; the C6 is reset, Wi-Fi stays off). Switching off stops Wi-Fi;
+    the C6 stays powered. Holding it in reset would save some more current; to
+    be measured once the power supply is defined.
 
 ### Web editor
 
@@ -79,6 +105,12 @@ presets/
 - The same web app lives in the repository (`tools/preset-editor/`) and can be
   opened locally on the desktop without the scooter; it then works on files
   (import/export) only.
+- **Serving** (added 2026-11-26): a CMake step gzips the editor files (HTML, JS,
+  CSS and `mock-dash.mjs`, which the editor also imports on the dash) and embeds
+  them in the firmware. They are served with `Content-Encoding: gzip` and an
+  ETag from the firmware build, so a browser never keeps an old editor after a
+  firmware update. `presets/index.json` is not served (only the local mode on
+  the desktop uses it).
 - Features:
   - **Patterns:** segment list with length (cm), colour and brightness; ground
     view of the whole pattern
@@ -105,6 +137,25 @@ presets/
 | GET | `/api/export` | all user presets as one JSON bundle |
 | GET | `/api/settings` | current LED settings (ADR 0012) |
 | POST | `/api/time` | device time from the browser, sent automatically when the editor opens (ADR 0014) |
+
+### Implementation on dash (added 2026-11-26)
+
+- `dash/app/editor_api.c`, platform-independent: request parsing, validation
+  and response JSON (cJSON), with a unit test whose cases are taken from the
+  Node tests of the mock dash (`tools/preset-editor/`), so both follow the same
+  rules: limits, `409 Conflict`, built-in slots read-only (`403`), German error
+  messages. `dash/main/wifi_ap.c` and `dash/main/http_server.c` connect it to
+  ESP-IDF (`esp_wifi_remote`, `esp_http_server`).
+- Request bodies up to 256 KB (a pattern with 2048 segments is ~120 KB of JSON);
+  the buffer is in PSRAM.
+- The HTTP server runs in its own task and accesses data shared with the GUI
+  only under a lock. Actions such as activating a preset go through the same
+  `ui_actions` as the touch GUI, so GUI and editor always agree.
+- **Until the UART link exists** (ADR 0019): the demo core keeps the presets in
+  dash RAM, like the mock dash; user presets are lost on restart, built-in
+  presets remain. The built-in presets come from the same `presets/*.json`: a
+  build script converts them into C data, the same script that will generate
+  the built-in presets of core later.
 
 ### JSON formats
 
