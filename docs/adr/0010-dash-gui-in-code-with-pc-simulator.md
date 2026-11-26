@@ -79,7 +79,8 @@ common/include/   # code shared with core (e.g. overlay formula, ADR 0012)
 Three screens, switched by swiping or by tabs (icon above text) at the bottom:
 
 1. **Ride**
-   - Speed in km/h inside an arc gauge (0 … 16 km/h); the decimal is shown at
+   - Speed in km/h inside an arc gauge (0 … 16 km/h) with a speedometer scale
+     (ticks at every km/h, numbers at 0, 5, 10, 15); the decimal is shown at
      60 % size in grey so it does not distract
    - Trip and total distance directly below the gauge
    - Two distance measurements (ADR 0008), each with start/stop and reset

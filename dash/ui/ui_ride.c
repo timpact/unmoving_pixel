@@ -1,11 +1,20 @@
 /* Ride screen: speed, trip/total distance, two distance measurements (ADR 0008, 0010). */
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "ui_internal.h"
 
-#define SPEED_MAX_KMH_X10 160   /* arc scale: 0 … 16.0 km/h (4 m/s = 14.4 km/h) */
+#define SPEED_MAX_KMH     16    /* gauge range: 0 … 16 km/h (4 m/s = 14.4 km/h) */
+#define SPEED_MAX_KMH_X10 (SPEED_MAX_KMH * 10)
 #define SPEED_BOX_H       280
+#define GAUGE_D           244   /* arc diameter */
+#define GAUGE_W           14    /* arc width */
+#define GAUGE_START       135   /* degrees, 0 km/h (LVGL: 0° = right, clockwise) */
+#define GAUGE_SWEEP       270
+#define TICK_MAJOR        10    /* tick length at 0, 5, 10, 15 km/h */
+#define TICK_MINOR        5     /* tick length at every km/h */
+#define LABEL_R           (GAUGE_D / 2 + TICK_MAJOR + 16)   /* radius of the scale numbers */
 #define SPEED_COMMA_X     262   /* x of the decimal comma within the 448 px wide box */
 
 typedef struct {
@@ -129,17 +138,45 @@ void ui_ride_create(lv_obj_t *tab)
     lv_obj_remove_flag(speed_box, LV_OBJ_FLAG_SCROLLABLE);
 
     s_arc = lv_arc_create(speed_box);
-    lv_obj_set_size(s_arc, SPEED_BOX_H, SPEED_BOX_H);
+    lv_obj_set_size(s_arc, GAUGE_D, GAUGE_D);
     lv_obj_center(s_arc);
-    lv_arc_set_bg_angles(s_arc, 135, 45);
+    lv_arc_set_bg_angles(s_arc, GAUGE_START, (GAUGE_START + GAUGE_SWEEP) % 360);
     lv_arc_set_range(s_arc, 0, SPEED_MAX_KMH_X10);
     lv_arc_set_value(s_arc, 0);
     lv_obj_remove_style(s_arc, NULL, LV_PART_KNOB);
     lv_obj_remove_flag(s_arc, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_arc_width(s_arc, 16, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(s_arc, 16, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(s_arc, GAUGE_W, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(s_arc, GAUGE_W, LV_PART_INDICATOR);
     lv_obj_set_style_arc_color(s_arc, UI_COL_BORDER, LV_PART_MAIN);
     lv_obj_set_style_arc_color(s_arc, UI_COL_ACCENT, LV_PART_INDICATOR);
+
+    /* Scale outside the ring: a tick at every km/h, longer ticks and numbers at 0, 5, 10, 15 */
+    lv_obj_t *scale = lv_scale_create(speed_box);
+    lv_obj_set_size(scale, GAUGE_D, GAUGE_D);
+    lv_obj_center(scale);
+    lv_scale_set_mode(scale, LV_SCALE_MODE_ROUND_OUTER);
+    lv_scale_set_range(scale, 0, SPEED_MAX_KMH);
+    lv_scale_set_total_tick_count(scale, SPEED_MAX_KMH + 1);
+    lv_scale_set_major_tick_every(scale, 5);
+    lv_scale_set_label_show(scale, false);   /* numbers are separate labels (checked by ADR 0016) */
+    lv_scale_set_angle_range(scale, GAUGE_SWEEP);
+    lv_scale_set_rotation(scale, GAUGE_START);
+    lv_obj_remove_flag(scale, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_arc_width(scale, 0, LV_PART_MAIN);
+    lv_obj_set_style_length(scale, TICK_MINOR, LV_PART_ITEMS);
+    lv_obj_set_style_line_width(scale, 2, LV_PART_ITEMS);
+    lv_obj_set_style_line_color(scale, UI_COL_BORDER, LV_PART_ITEMS);
+    lv_obj_set_style_length(scale, TICK_MAJOR, LV_PART_INDICATOR);
+    lv_obj_set_style_line_width(scale, 3, LV_PART_INDICATOR);
+    lv_obj_set_style_line_color(scale, UI_COL_MUTED, LV_PART_INDICATOR);
+
+    for (int v = 0; v <= SPEED_MAX_KMH; v += 5) {
+        char txt[4];
+        lv_snprintf(txt, sizeof(txt), "%d", v);
+        float a = (GAUGE_START + (float)v / SPEED_MAX_KMH * GAUGE_SWEEP) * 3.14159265f / 180.0f;
+        lv_obj_t *l = ui_label(speed_box, ui_fonts.small, UI_COL_MUTED, txt);
+        lv_obj_align(l, LV_ALIGN_CENTER, (int32_t)lroundf(LABEL_R * cosf(a)), (int32_t)lroundf(LABEL_R * sinf(a)));
+    }
 
     ui_fixed_num_create(&s_speed, speed_box, 448, SPEED_COMMA_X, 1,
                         ui_fonts.speed, UI_COL_TEXT, ui_fonts.speed_dec, UI_COL_MUTED);

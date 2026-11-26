@@ -202,8 +202,8 @@ void ui_init(const ui_actions_t *actions, const void *font_data, size_t font_siz
     ui_fonts.text = make_text_font(&s_text_fonts[1], &lv_font_montserrat_22, font_data, font_size, 22);
     ui_fonts.value = make_text_font(&s_text_fonts[2], &lv_font_montserrat_34, font_data, font_size, 34);
     ui_fonts.measure = make_ttf(font_data, font_size, 42);
-    ui_fonts.speed = make_ttf(font_data, font_size, 120);
-    ui_fonts.speed_dec = make_ttf(font_data, font_size, 72);
+    ui_fonts.speed = make_ttf(font_data, font_size, 108);
+    ui_fonts.speed_dec = make_ttf(font_data, font_size, 65);   /* 60 % of the integer part */
 
     lv_display_t *disp = lv_display_get_default();
     lv_theme_t *th = lv_theme_default_init(disp, UI_COL_ACCENT, UI_COL_WARN, true, ui_fonts.text);

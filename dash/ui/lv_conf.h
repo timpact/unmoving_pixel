@@ -47,6 +47,7 @@
 #define LV_USE_KEYBOARD 1
 #define LV_USE_BUTTONMATRIX 1
 #define LV_USE_ROLLER   1
+#define LV_USE_SCALE    1
 
 #define LV_USE_LOG 1
 #define LV_LOG_LEVEL LV_LOG_LEVEL_WARN

@@ -21,8 +21,8 @@ typedef struct {
     const lv_font_t *text;      /* 22 px: labels, buttons */
     const lv_font_t *value;     /* 34 px: distances */
     const lv_font_t *measure;   /* 42 px: measurement values */
-    const lv_font_t *speed;     /* 120 px: speed, integer part */
-    const lv_font_t *speed_dec; /* 72 px: speed, decimal part (60 %) */
+    const lv_font_t *speed;     /* 108 px: speed, integer part */
+    const lv_font_t *speed_dec; /* 65 px: speed, decimal part (60 %) */
 } ui_fonts_t;
 
 /* Number with a fixed decimal comma: the integer part is right-aligned to

@@ -25,12 +25,12 @@ Rules are numbered so that checks and reviews can refer to them (e.g. `N2`).
 
   | Role | Size |
   |---|---|
-  | captions, units, table text | 18 px |
+  | captions, units, table text, gauge numbers | 18 px |
   | labels, buttons, dropdowns | 22 px |
   | distances, dialog values | 34 px |
   | measurement values | 42 px |
-  | speed, decimal part | 72 px (60 % of the integer part) |
-  | speed, integer part | 120 px |
+  | speed, decimal part | 65 px (60 % of the integer part) |
+  | speed, integer part | 108 px |
 
 - **T2** Text is never cut off. Text wraps only where wrapping is intended
   (hints, explanations, dialog messages); labels, values, buttons, table cells
@@ -55,6 +55,10 @@ Rules are numbered so that checks and reviews can refer to them (e.g. `N2`).
   `-99.999`).
 - **N6** Speed: decimal place at 60 % size in grey; unit line below the number.
   Backward travel: magnitude plus "rückwärts" (ADR 0015).
+- **N9** Speed gauge: 270° arc from 0 to 16 km/h (diameter 244 px), filled up to
+  the current speed. Scale outside the arc: a tick at every km/h (`border`),
+  longer ticks and numbers at 0, 5, 10 and 15 (`muted`, 18 px). The numbers are
+  label objects, so the checks see them (no overlap with the speed).
 - **N7** Live values are updated at most 20 times per second and only redrawn
   when the text changes. A changing value must never move any other element
   (no layout shift).
