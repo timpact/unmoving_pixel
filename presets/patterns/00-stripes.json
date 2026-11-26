@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "type": "pattern",
+  "name": "Streifen",
+  "segments": [
+    {
+      "length_cm": 4,
+      "color": "#ff0000",
+      "brightness": 100
+    },
+    {
+      "length_cm": 4,
+      "color": "#000000",
+      "brightness": 0
+    },
+    {
+      "length_cm": 4,
+      "color": "#0040ff",
+      "brightness": 60
+    },
+    {
+      "length_cm": 4,
+      "color": "#000000",
+      "brightness": 0
+    }
+  ]
+}

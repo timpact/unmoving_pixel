@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "type": "overlay",
+  "overlay_type": "edge_fade",
+  "name": "Spotlight",
+  "level_start": 0,
+  "level_mid": 100,
+  "level_end": 0,
+  "fade_start_mm": 250,
+  "fade_end_mm": 250
+}

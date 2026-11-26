@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "type": "overlay",
+  "overlay_type": "edge_fade",
+  "name": "Weiche Ränder",
+  "level_start": 10,
+  "level_mid": 100,
+  "level_end": 10,
+  "fade_start_mm": 150,
+  "fade_end_mm": 150
+}

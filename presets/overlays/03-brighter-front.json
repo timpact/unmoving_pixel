@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "type": "overlay",
+  "overlay_type": "edge_fade",
+  "name": "Nach vorn heller",
+  "level_start": 20,
+  "level_mid": 100,
+  "level_end": 100,
+  "fade_start_mm": 350,
+  "fade_end_mm": 0
+}

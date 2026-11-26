@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preset-Editor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%230d1117%22/%3E%3Crect x=%223%22 y=%226%22 width=%224%22 height=%224%22 fill=%22%232dd4bf%22/%3E%3Crect x=%229%22 y=%226%22 width=%224%22 height=%224%22 fill=%22%232dd4bf%22 opacity=%22.5%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <button id="drawer-toggle" class="btn icon drawer-toggle" aria-label="Presetliste" aria-expanded="false">☰</button>
+  <div class="brand">unmoving pixel <span>Preset-Editor</span></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-patterns" data-tab="patterns" aria-selected="true">Muster</button>
+    <button role="tab" id="tab-overlays" data-tab="overlays" aria-selected="false">Overlays</button>
+  </nav>
+  <div class="spacer"></div>
+  <button id="undo" class="btn icon" title="Rückgängig (⌘/Strg+Z)" aria-label="Rückgängig"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3 2 6l3 3"/><path d="M2 6h7.5a4 4 0 0 1 0 8H7"/></svg></button>
+  <button id="redo" class="btn icon" title="Wiederholen (⇧+⌘/Strg+Z)" aria-label="Wiederholen"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 3 3 3-3 3"/><path d="M14 6H6.5a4 4 0 0 0 0 8H9"/></svg></button>
+  <div id="conn" class="conn" role="status"><span class="dot"></span><span class="text">verbinde …</span></div>
+</header>
+
+<div class="layout">
+  <aside id="list-col" class="col-list" aria-label="Presets">
+    <div id="preset-list" class="preset-list" role="listbox" aria-label="Presetliste"></div>
+    <div class="list-actions">
+      <button id="act-new" class="btn">Neu</button>
+      <button id="act-dup" class="btn">Duplizieren</button>
+      <button id="act-import" class="btn">Importieren</button>
+      <button id="act-export" class="btn">Exportieren</button>
+      <button id="act-export-all" class="btn wide">Alle exportieren</button>
+      <button id="act-del" class="btn danger-text wide">Löschen</button>
+      <input type="file" id="file-input" accept=".json,application/json" multiple hidden>
+    </div>
+  </aside>
+
+  <main class="col-work">
+    <section class="doc-head panel">
+      <div class="name-row">
+        <span id="dirty-dot" class="dirty-dot" title="Ungespeicherte Änderungen" hidden></span>
+        <input id="name" class="name-input" type="text" autocomplete="off" spellcheck="false" aria-label="Name">
+        <span id="name-bytes" class="hint num"></span>
+        <span id="lock" class="lock hint" hidden>🔒 eingebaut – Speichern legt eine Kopie an</span>
+      </div>
+      <div id="name-err" class="field-error" role="alert"></div>
+      <div class="head-row">
+        <div class="pattern-only stepper-wrap">
+          <label for="seg-count">Abschnitte</label>
+          <div class="stepper">
+            <button id="seg-minus" class="btn icon" aria-label="Ein Abschnitt weniger">−</button>
+            <input id="seg-count" class="num-input" type="text" inputmode="numeric" autocomplete="off">
+            <button id="seg-plus" class="btn icon" aria-label="Ein Abschnitt mehr">+</button>
+          </div>
+          <span class="hint">1 … 2048</span>
+        </div>
+        <div class="pattern-only total"><span class="hint">Gesamtlänge</span> <span id="total-len" class="num"></span></div>
+        <div class="spacer"></div>
+        <button id="try" class="btn">Am Strip testen</button>
+        <button id="save" class="btn primary" title="Speichern (⌘/Strg+S)">Speichern</button>
+      </div>
+    </section>
+
+    <div id="notice" class="notice" role="alert" hidden>
+      <span id="notice-text">Am dash geändert.</span>
+      <div class="spacer"></div>
+      <button id="notice-reload" class="btn">Neu laden</button>
+    </div>
+
+    <section id="ground" class="panel pattern-only">
+      <div class="section-head">
+        <h2>Boden</h2>
+        <span class="hint">ganzes Muster, maßstäblich</span>
+        <div class="spacer"></div>
+        <button id="zoom-fit" class="btn small">Einpassen</button>
+        <button id="zoom-out" class="btn small icon" aria-label="Verkleinern">−</button>
+        <button id="zoom-in" class="btn small icon" aria-label="Vergrößern">+</button>
+      </div>
+      <div id="ground-scroll" class="ground-scroll">
+        <div id="ground-spacer" class="ground-spacer"><canvas id="ground-canvas" class="ground-canvas"></canvas></div>
+      </div>
+      <div id="tooltip" class="tooltip" hidden></div>
+    </section>
+
+    <section id="overlay-params" class="panel overlay-only">
+      <div class="section-head"><h2>Parameter</h2><span class="hint">Pegel 0 … 100 %, Übergänge zusammen max. 500 mm</span></div>
+      <div id="ovl-fields" class="ovl-fields"></div>
+      <canvas id="curve-canvas" class="curve-canvas" aria-label="Verlauf über die 72 LEDs"></canvas>
+    </section>
+
+    <section id="preview" class="panel">
+      <div class="section-head">
+        <h2>Strip-Vorschau</h2>
+        <span class="hint">72 LEDs, 6,94 mm Abstand</span>
+        <div class="spacer"></div>
+        <label for="preview-with" id="preview-with-label">Overlay</label>
+        <select id="preview-with" class="select"></select>
+      </div>
+      <canvas id="strip-canvas" class="strip-canvas"></canvas>
+      <div class="preview-controls">
+        <button id="play" class="btn small" aria-label="Fahrt anhalten">❚❚</button>
+        <label for="speed">Geschwindigkeit</label>
+        <input id="speed" type="range" min="0" max="4" step="0.1" value="1">
+        <output id="speed-out" class="num">1,0 m/s</output>
+      </div>
+    </section>
+
+    <section id="table" class="panel table-panel pattern-only">
+      <div class="seg-head" role="row">
+        <span>#</span><span>Länge</span><span>Farbe</span><span>Helligkeit</span>
+      </div>
+      <div id="seg-body" class="seg-body" tabindex="-1">
+        <div id="seg-spacer" class="seg-spacer"></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="col-panel">
+    <div class="pattern-only panel-stack">
+      <section class="panel">
+        <div class="section-head"><h2>Auswahl</h2><div class="spacer"></div><button id="sel-clear" class="btn small">Aufheben</button></div>
+        <p id="sel-info" class="hint"></p>
+        <div class="prop-grid">
+          <label for="p-length">Länge</label>
+          <div class="unit-field"><input id="p-length" class="num-input" type="text" inputmode="numeric" autocomplete="off"><span>cm</span></div>
+          <label for="p-color-hex">Farbe</label>
+          <div class="unit-field"><input id="p-color" type="color" class="color-input" aria-label="Farbe wählen"><input id="p-color-hex" class="hex-input" type="text" autocomplete="off" spellcheck="false"></div>
+          <label for="p-bright">Helligkeit</label>
+          <div class="unit-field"><input id="p-bright" class="num-input" type="text" inputmode="numeric" autocomplete="off"><span>%</span></div>
+        </div>
+        <div id="p-err" class="field-error" role="alert"></div>
+        <button id="sel-delete" class="btn danger-text">Auswahl löschen</button>
+      </section>
+
+      <section class="panel">
+        <div class="section-head"><h2>Werkzeuge</h2></div>
+        <p class="hint">Wirken auf die Auswahl, ohne Auswahl auf alle Abschnitte.</p>
+
+        <div class="tool">
+          <h3>Jeder n-te</h3>
+          <div class="tool-grid">
+            <label for="t-n">jeder</label>
+            <div class="unit-field"><input id="t-n" class="num-input" type="text" inputmode="numeric" value="2"><span>.</span></div>
+            <label for="t-start">ab dem</label>
+            <div class="unit-field"><input id="t-start" class="num-input" type="text" inputmode="numeric" value="2"><span>.</span></div>
+            <label for="t-prop">setze</label>
+            <select id="t-prop" class="select">
+              <option value="brightness">Helligkeit</option>
+              <option value="color">Farbe</option>
+              <option value="length_cm">Länge</option>
+            </select>
+            <label for="t-value">auf</label>
+            <div class="unit-field" id="t-value-wrap">
+              <input id="t-value" class="num-input" type="text" inputmode="numeric" value="0"><span id="t-value-unit">%</span>
+              <input id="t-value-color" type="color" class="color-input" value="#000000" hidden aria-label="Farbe">
+            </div>
+          </div>
+          <button id="t-nth-apply" class="btn">Anwenden</button>
+        </div>
+
+        <div class="tool">
+          <h3>Verlauf</h3>
+          <label class="check"><input id="g-color-on" type="checkbox" checked> Farbe</label>
+          <div class="indent gradient-stops">
+            <div id="g-stops" class="unit-field"></div>
+            <button id="g-stop-remove" class="btn small icon" aria-label="Farbe entfernen" title="Farbe entfernen">−</button>
+            <button id="g-stop-add" class="btn small icon" aria-label="Farbe hinzufügen" title="Farbe hinzufügen (max. 4)">+</button>
+          </div>
+          <label class="check indent"><input id="g-cyclic" type="checkbox"> nahtlos wiederholen</label>
+          <p class="hint indent">Die Farben liegen gleichmäßig über der Auswahl. Nahtlos: nach der letzten Farbe geht es zurück zur ersten, damit das wiederholte Muster ohne Sprung weiterläuft.</p>
+          <label class="check"><input id="g-bright-on" type="checkbox"> Helligkeit</label>
+          <div class="unit-field indent"><input id="g-b-from" class="num-input" type="text" inputmode="numeric" value="100" aria-label="Helligkeit von"><span>→</span><input id="g-b-to" class="num-input" type="text" inputmode="numeric" value="0" aria-label="Helligkeit bis"><span>%</span></div>
+          <button id="t-grad-apply" class="btn">Anwenden</button>
+        </div>
+
+        <div class="tool">
+          <h3>Gruppe wiederholen</h3>
+          <div class="tool-grid">
+            <label for="r-times">Anzahl</label>
+            <div class="unit-field"><input id="r-times" class="num-input" type="text" inputmode="numeric" value="1"><span>×</span></div>
+          </div>
+          <p class="hint">Die zusammenhängende Auswahl wird dahinter eingefügt.</p>
+          <button id="t-rep-apply" class="btn">Anwenden</button>
+        </div>
+
+        <div class="tool">
+          <h3>Länge verteilen</h3>
+          <div class="tool-grid">
+            <label for="l-mode">Modus</label>
+            <select id="l-mode" class="select">
+              <option value="each">jeder Abschnitt</option>
+              <option value="total">Gesamtlänge</option>
+            </select>
+            <label for="l-value">Länge</label>
+            <div class="unit-field"><input id="l-value" class="num-input" type="text" inputmode="numeric" value="10"><span>cm</span></div>
+          </div>
+          <button id="t-len-apply" class="btn">Anwenden</button>
+        </div>
+        <div id="t-err" class="field-error" role="alert"></div>
+      </section>
+    </div>
+
+    <div class="overlay-only panel-stack">
+      <section class="panel">
+        <div class="section-head"><h2>So wirkt das Overlay</h2></div>
+        <p class="hint">Das Overlay sitzt fest am Strip und fährt mit. Es dunkelt die Enden mit S-Kurven ab:
+          Pegel Anfang → Pegel Mitte über den Übergang Anfang, Pegel Mitte → Pegel Ende über den Übergang Ende.</p>
+        <p class="hint">Regler am dash ändern das aktive Overlay direkt. Eingebaute Overlays werden dabei
+          automatisch als „Name (2)“ kopiert.</p>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<div id="toast" class="toast" role="status" hidden></div>
+<dialog id="dialog" class="dialog">
+  <form method="dialog">
+    <h2 id="dialog-title"></h2>
+    <p id="dialog-text"></p>
+    <div id="dialog-buttons" class="dialog-buttons"></div>
+  </form>
+</dialog>
+</body>
+</html>

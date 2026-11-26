@@ -1,0 +1,17 @@
+{
+  "format_version": 1,
+  "type": "pattern",
+  "name": "Punkte",
+  "segments": [
+    {
+      "length_cm": 1,
+      "color": "#ffffff",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#000000",
+      "brightness": 0
+    }
+  ]
+}

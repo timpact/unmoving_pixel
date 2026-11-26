@@ -1,0 +1,67 @@
+{
+  "format_version": 1,
+  "type": "pattern",
+  "name": "Regenbogen",
+  "segments": [
+    {
+      "length_cm": 5,
+      "color": "#ff0000",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#ff8000",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#ffff00",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#80ff00",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#00ff00",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#00ff80",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#00ffff",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#0080ff",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#0000ff",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#8000ff",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#ff00ff",
+      "brightness": 100
+    },
+    {
+      "length_cm": 5,
+      "color": "#ff0080",
+      "brightness": 100
+    }
+  ]
+}

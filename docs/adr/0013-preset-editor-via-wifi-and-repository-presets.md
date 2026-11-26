@@ -39,6 +39,9 @@ presets/
 
 - The repository is the library of presets. Files are plain JSON (format below),
   so they can be reviewed, diffed and shared.
+- File names start with a two-digit number (`00-none.json`, `01-soft-edges.json`);
+  the built-in slots are assigned in file name order, so slot numbers stay stable
+  when files are added at the end.
 - **Built-in presets:** at build time, a script converts all files in `presets/`
   into C arrays that are compiled into the core firmware as read-only slots.
 - **User presets** are created in the editor and stored on core. They get into
@@ -133,6 +136,12 @@ Overlay (mirrors ADR 0012):
   "fade_start_mm": 150,
   "fade_end_mm": 150
 }
+```
+
+Bundle (export of all user presets, import of several presets at once):
+
+```json
+{ "format_version": 1, "type": "bundle", "presets": [ { "type": "pattern", … }, { "type": "overlay", … } ] }
 ```
 
 ### Data flow

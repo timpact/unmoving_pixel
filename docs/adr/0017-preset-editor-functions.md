@@ -1,7 +1,7 @@
 # ADR 0017: Preset editor – functions and interaction
 
 - Status: Accepted
-- Date: 2026-11-26
+- Date: 2026-11-26 (updated 2026-11-26: local mode via dev server, gradient with up to 4 colours)
 
 ## Context
 
@@ -74,7 +74,7 @@ Tools work on the selection (or on all segments if nothing is selected):
 | Tool | Parameters | Example |
 |---|---|---|
 | **Jeder n-te** | n (≥ 2), start position k (1 … n), property (length, colour or brightness) and value | every 2nd from the 2nd: brightness 0 |
-| **Verlauf** | colour A → B and/or brightness A → B over the selection, linear | red → blue over 12 segments |
+| **Verlauf** | 2 … 4 colours, evenly spaced over the selection (by segment position), optionally "nahtlos wiederholen" (cyclic: back to the first colour, so the repeated pattern continues without a seam); and/or brightness A → B, linear | red → green → blue over 12 segments, cyclic |
 | **Gruppe wiederholen** | number of repetitions; the selected contiguous range is inserted n times after itself | 3 segments × 4 |
 | **Länge verteilen** | either the same length for every segment, or a total length split evenly (remainder spread over the first segments) | 10 m over 50 segments |
 
@@ -130,12 +130,17 @@ rejected with a message.
   - `render.js`: strip rendering (box filter, overlay; same algorithm as core)
   - `api.js`: dash API and local mode
   - `index.html`, `app.js`, `style.css`: user interface
+  - `mock-dash.mjs`: dash + core behaviour (slots, revisions, conflicts,
+    auto-copy) for the dev server and the local mode
 - **Local development without the scooter:** `node tools/preset-editor/dev-server.mjs`
   (Node, no dependencies) serves the editor and a mock dash API in memory that
   behaves like dash and core (slots, built-in read-only, revisions, conflicts,
   auto-copy). It can simulate changes "from the dash" to test conflicts.
-- **Local mode without any server:** opening `index.html` directly works on JSON
-  files only (import, export, presets from `presets/`).
+- **Local mode without the scooter:** `node tools/preset-editor/dev-server.mjs --local`
+  serves the editor without the dash API. The editor then keeps user presets in
+  the browser (localStorage) and works with JSON files (import, export); the
+  built-in presets come from `presets/`. Opening `index.html` directly from disk
+  is not possible: browsers do not load ES modules from `file://` URLs.
 - **Tests:** `node --test tools/preset-editor/test/` for `model.js` and
   `render.js` (tools, limits, JSON round trip, gradient, rendering against
   reference values shared with core).

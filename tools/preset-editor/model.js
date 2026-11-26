@@ -178,6 +178,57 @@ export function serializePreset(preset) {
     return JSON.stringify(preset, null, 2) + '\n';
 }
 
+/*
+ * Bundle of several presets (export "all", ADR 0013):
+ *   { format_version: 1, type: "bundle", presets: [ ...pattern/overlay JSON ] }
+ */
+export function makeBundle(presets) {
+    return { format_version: 1, type: 'bundle', presets };
+}
+
+/* Parses a single preset or a bundle; returns an array of validated presets */
+export function parsePresetFile(text) {
+    let obj;
+    try {
+        obj = JSON.parse(text);
+    } catch {
+        throw new Error('Keine gültige JSON-Datei');
+    }
+    if (obj?.type !== 'bundle') return [parsePreset(text)];
+    if (obj.format_version !== 1) throw new Error('Unbekannte Formatversion');
+    if (!Array.isArray(obj.presets)) throw new Error('Sammeldatei ohne Presets');
+    return obj.presets.map((p, i) => {
+        try {
+            return parsePreset(JSON.stringify(p));
+        } catch (e) {
+            throw new Error(`Preset ${i + 1}: ${e.message}`);
+        }
+    });
+}
+
+/* File name for an exported preset, e.g. "Weiche Ränder" → "weiche-raender.json" */
+export function presetFileName(name) {
+    const map = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss' };
+    const slug = name.toLowerCase().replace(/[äöüß]/g, (c) => map[c])
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return (slug || 'preset') + '.json';
+}
+
+/*
+ * Name for a copy (ADR 0017): "<name> (2)" or the next free number, shortened to
+ * 16 bytes UTF-8. An existing " (n)" suffix is replaced, not repeated.
+ */
+export function copyName(name, existingNames) {
+    const taken = new Set(existingNames);
+    const base = name.replace(/ \(\d+\)$/, '');
+    for (let n = 2; ; n++) {
+        const suffix = ` (${n})`;
+        const head = truncateUtf8(base, LIMITS.nameBytes - utf8Length(suffix)).trimEnd();
+        const candidate = head + suffix;
+        if (!taken.has(candidate)) return candidate;
+    }
+}
+
 /* ---- segments ------------------------------------------------------------------------ */
 
 export function totalLengthCm(segments) {
@@ -285,17 +336,46 @@ export function mixColor(a, b, t) {
 }
 
 /*
- * Gradient over the selection (in order): colour from → to and/or brightness
- * from → to, linear. The first selected segment gets "from", the last "to".
+ * Colour at t (0 … 1) of a multi-colour gradient with evenly spaced stops.
+ *   open:   stops at t = 0, 1/(k-1), …, 1 – the last stop is reached at t = 1
+ *   cyclic: stops at t = 0, 1/k, …, (k-1)/k, then back to the first stop at
+ *           t = 1, so a repeating pattern continues without a seam
+ */
+export function gradientColor(stops, t, cyclic = false) {
+    const k = stops.length;
+    if (k === 1) return normalizeColor(stops[0]);
+    const spans = cyclic ? k : k - 1;
+    const u = Math.min(Math.max(t, 0), 1) * spans;
+    const i = Math.min(Math.floor(u), spans - 1);
+    return mixColor(stops[i], stops[(i + 1) % k], u - i);
+}
+
+/*
+ * Gradient over the selection (in order, evenly by segment position):
+ *   color:      { stops: [2 … 4 colours], cyclic }  (ADR 0017)
+ *   brightness: { from, to }, linear
+ * Open gradient: the first selected segment gets the first colour, the last one
+ * the last colour. Cyclic: the colours are spread over the selection as one
+ * period; the segment after the selection would get the first colour again.
  */
 export function toolGradient(segments, indices, { color = null, brightness = null }) {
+    if (color && (!Array.isArray(color.stops) || color.stops.length < 2 || color.stops.length > 4 ||
+        color.stops.some((c) => normalizeColor(c) === null))) {
+        throw new Error('Verlauf braucht 2 … 4 Farben');
+    }
     const sel = effectiveSelection(segments, indices);
+    const n = sel.length;
     const out = segments.slice();
     sel.forEach((idx, pos) => {
-        const t = sel.length > 1 ? pos / (sel.length - 1) : 0;
         const s = { ...out[idx] };
-        if (color) s.color = mixColor(color.from, color.to, t);
-        if (brightness) s.brightness = Math.round(brightness.from + (brightness.to - brightness.from) * t);
+        if (color) {
+            const t = color.cyclic ? pos / n : (n > 1 ? pos / (n - 1) : 0);
+            s.color = gradientColor(color.stops, t, !!color.cyclic);
+        }
+        if (brightness) {
+            const t = n > 1 ? pos / (n - 1) : 0;
+            s.brightness = Math.round(brightness.from + (brightness.to - brightness.from) * t);
+        }
         out[idx] = s;
     });
     return out;

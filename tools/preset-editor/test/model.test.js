@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-    LIMITS, UndoStack, applyToSelection, clickSelect, deleteSegments, formatNumber, mixColor,
-    newOverlay, newPattern, parseNumber, parsePreset, selectionSummary, serializePreset,
+    LIMITS, UndoStack, applyToSelection, clickSelect, copyName, deleteSegments, formatNumber, makeBundle, mixColor,
+    newOverlay, newPattern, parseNumber, parsePreset, parsePresetFile, presetFileName, selectionSummary, serializePreset,
     setSegmentCount, toolDistributeLength, toolEveryNth, toolGradient, toolRepeatGroup,
     totalLengthCm, truncateUtf8, utf8Length, validateOverlay, validatePattern,
 } from '../model.js';
@@ -94,7 +94,7 @@ test('tool: every n-th (every 2nd from the 2nd: brightness 0)', () => {
 });
 
 test('tool: gradient in linear light', () => {
-    const out = toolGradient(segs(3), [], { color: { from: '#000000', to: '#ffffff' }, brightness: { from: 0, to: 100 } });
+    const out = toolGradient(segs(3), [], { color: { stops: ['#000000', '#ffffff'] }, brightness: { from: 0, to: 100 } });
     assert.deepEqual(out.map((x) => x.brightness), [0, 50, 100]);
     assert.equal(out[0].color, '#000000');
     assert.equal(out[2].color, '#ffffff');
@@ -146,4 +146,43 @@ test('JSON round trip and import errors', () => {
     assert.throws(() => parsePreset('{"format_version":2}'), /Formatversion/);
     assert.throws(() => parsePreset(JSON.stringify({ format_version: 1, type: 'pattern', name: 'x', segments: [] })),
         /Abschnitt/);
+});
+
+test('copy name: "<name> (2)", next free number, 16 bytes', () => {
+    assert.equal(copyName('Spotlight', ['Spotlight']), 'Spotlight (2)');
+    assert.equal(copyName('Spotlight', ['Spotlight', 'Spotlight (2)']), 'Spotlight (3)');
+    assert.equal(copyName('Spotlight (2)', ['Spotlight (2)']), 'Spotlight (3)', 'suffix replaced');
+    assert.equal(copyName('Weiche Ränder', []), 'Weiche Ränd (2)');
+    assert.ok(utf8Length(copyName('ääääääääääää', [])) <= 16);
+});
+
+test('bundle and file names', () => {
+    const b = makeBundle([newPattern('A'), newOverlay('B')]);
+    const back = parsePresetFile(serializePreset(b));
+    assert.deepEqual(back.map((p) => p.type), ['pattern', 'overlay']);
+    assert.equal(parsePresetFile(serializePreset(newOverlay('C'))).length, 1);
+    assert.throws(() => parsePresetFile(JSON.stringify(makeBundle([{ type: 'pattern' }]))), /Preset 1/);
+    assert.equal(presetFileName('Weiche Ränder'), 'weiche-raender.json');
+    assert.equal(presetFileName('10-m-Muster!'), '10-m-muster.json');
+    assert.equal(presetFileName('***'), 'preset.json');
+});
+
+test('tool: gradient with 3 and 4 colours, evenly spaced', () => {
+    const three = toolGradient(segs(5), [], { color: { stops: ['#ff0000', '#00ff00', '#0000ff'] } });
+    assert.deepEqual(three.map((x) => x.color).filter((_, i) => i % 2 === 0), ['#ff0000', '#00ff00', '#0000ff']);
+    const four = toolGradient(segs(7), [], { color: { stops: ['#ff0000', '#00ff00', '#0000ff', '#ffffff'] } });
+    assert.deepEqual([0, 2, 4, 6].map((i) => four[i].color), ['#ff0000', '#00ff00', '#0000ff', '#ffffff']);
+    assert.throws(() => toolGradient(segs(3), [], { color: { stops: ['#ff0000'] } }), /2 … 4/);
+    assert.throws(() => toolGradient(segs(3), [], { color: { stops: ['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#000000'] } }), /2 … 4/);
+});
+
+test('tool: cyclic gradient repeats without a seam', () => {
+    /* 3 colours over 6 segments: stops on segments 1, 3, 5; segment 6 is half way back to red */
+    const out = toolGradient(segs(6), [], { color: { stops: ['#ff0000', '#00ff00', '#0000ff'], cyclic: true } });
+    assert.deepEqual([0, 2, 4].map((i) => out[i].color), ['#ff0000', '#00ff00', '#0000ff']);
+    assert.equal(out[5].color, mixColor('#0000ff', '#ff0000', 0.5));
+    assert.equal(out[1].color, mixColor('#ff0000', '#00ff00', 0.5));
+    /* same step between every neighbour, including last → first of the next repetition */
+    const two = toolGradient(segs(4), [], { color: { stops: ['#000000', '#ffffff'], cyclic: true } });
+    assert.deepEqual(two.map((x) => x.color), ['#000000', '#bcbcbc', '#ffffff', '#bcbcbc']);
 });

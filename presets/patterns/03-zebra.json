@@ -1,0 +1,17 @@
+{
+  "format_version": 1,
+  "type": "pattern",
+  "name": "Zebra",
+  "segments": [
+    {
+      "length_cm": 10,
+      "color": "#ffffff",
+      "brightness": 100
+    },
+    {
+      "length_cm": 10,
+      "color": "#000000",
+      "brightness": 0
+    }
+  ]
+}
