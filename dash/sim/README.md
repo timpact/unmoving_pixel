@@ -32,8 +32,27 @@ User actions (buttons, sliders, lists) are printed to the terminal as
 |---|---|
 | `--zoom <f>` | scales the window (e.g. `0.6`); the GUI keeps its 480×800 layout |
 | `--link-drops` | simulates a lost core link for 2 s every 30 s ("--" display) |
-| `--screenshot <dir>` | headless: no window, writes `ride.bmp`, `led_top.bmp`, `led_bottom.bmp`, `settings.bmp`, `calib_counting.bmp`, `calib_input.bmp`, `calib_warn.bmp`, `calib_confirm.bmp`, `settings_after_calib.bmp` |
+| `--screenshot <dir>` | headless: no window, writes PNG screenshots of a simulated ride (ride, LED, settings, calibration steps) |
 | `--time <s>` | with `--screenshot`: simulated seconds before the screenshots (default 20) |
 | `--measure` | with `--screenshot`: starts measurement 1 at t = 5 s and measurement 2 at t = 12 s |
 
-Convert screenshots to PNG on macOS: `sips -s format png ride.bmp --out ride.png`.
+## GUI checks (ADR 0016)
+
+```sh
+dash/sim/build/dash_sim --check
+```
+
+Renders all scenarios with fixed test data and checks the rules of
+[`docs/ui-guidelines.md`](../../docs/ui-guidelines.md): fixed comma and units
+(value sweep), text fits, ride screen without scrolling, touch target size and
+spacing, colour tokens, and a pixel comparison with the approved reference
+screenshots in `reference/`. Exit code 0 = all checks passed.
+
+The reference comparison is postponed until the GUI is stable: as long as
+`dash/sim/reference/` does not exist, it is skipped (ADR 0016).
+
+- Results and diff images (`*_diff.png`, differences in red) are written to
+  `dash/sim/build/check/`.
+- Run the checks after every GUI change.
+- After an intended visual change has been reviewed and approved:
+  `dash_sim --check --update-references`, then commit code and references together.

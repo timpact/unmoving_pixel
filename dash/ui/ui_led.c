@@ -202,6 +202,7 @@ static lv_obj_t *slider(lv_obj_t *parent, int32_t min, int32_t max)
     lv_obj_t *s = lv_slider_create(parent);
     lv_slider_set_range(s, min, max);
     lv_obj_set_height(s, 14);
+    lv_obj_set_ext_click_area(s, 23);   /* 14 + 2 × 23 = 60 px touch height (I1) */
     lv_obj_set_style_pad_ver(parent, 6, 0);
     return s;
 }
@@ -279,6 +280,8 @@ void ui_led_create(lv_obj_t *tab)
     r = row(card);
     ui_label(r, ui_fonts.text, UI_COL_TEXT, LV_SYMBOL_WIFI "  Preset-Editor (WLAN)");
     s_editor_sw = lv_switch_create(r);
+    lv_obj_set_ext_click_area(s_editor_sw, 16);
+    lv_obj_set_style_bg_color(s_editor_sw, UI_COL_BORDER, LV_PART_MAIN);   /* C1 */
     lv_obj_add_event_cb(s_editor_sw, editor_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     s_editor_panel = row(card);
@@ -292,6 +295,7 @@ void ui_led_create(lv_obj_t *tab)
     s_wifi_text = ui_label(s_editor_panel, ui_fonts.small, UI_COL_TEXT, "");
     lv_obj_set_flex_grow(s_wifi_text, 1);
     lv_label_set_long_mode(s_wifi_text, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(s_wifi_text, UI_FLAG_WRAP_ALLOWED);
     lv_obj_add_flag(s_editor_panel, LV_OBJ_FLAG_HIDDEN);
 }
 

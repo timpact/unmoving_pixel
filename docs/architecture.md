@@ -131,6 +131,7 @@ See [`adr/`](adr/).
 | [0013](adr/0013-preset-editor-via-wifi-and-repository-presets.md) | Preset editor via Wi-Fi on dash, presets in the repository | Accepted |
 | [0014](adr/0014-encoder-calibration.md) | Encoder calibration | Accepted |
 | [0015](adr/0015-direction-of-travel.md) | Direction of travel | Accepted |
+| [0016](adr/0016-gui-guidelines-and-automated-checks.md) | GUI guidelines and automated GUI checks | Accepted |
 
 ## Open points
 

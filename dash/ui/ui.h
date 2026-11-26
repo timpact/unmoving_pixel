@@ -132,9 +132,15 @@ void ui_init(const ui_actions_t *actions, const void *font_data, size_t font_siz
 /* Refresh the widgets from the model. Call from the LVGL thread, e.g. every 50 ms. */
 void ui_update(const ui_model_t *model);
 
-/* For the simulator and screenshots */
+/* For the simulator, screenshots and GUI checks (ADR 0016) */
 void ui_show_tab(uint32_t index);
 void ui_scroll_led_page(bool to_bottom);
+void ui_scroll_page(bool to_bottom);            /* active tab */
+struct _lv_obj_t *ui_get_tab(uint32_t index);
+void ui_time_dialog_test(bool open);
+
+/* Object flag marking labels that may wrap (hints, explanations; rule T2) */
+#define UI_FLAG_WRAP_ALLOWED LV_OBJ_FLAG_USER_1
 /* Simulate keypad input and a tap on the main button of the calibration dialog */
 void ui_calib_test_input(const char *ref_cm, bool press_main);
 

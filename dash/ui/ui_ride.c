@@ -144,8 +144,9 @@ void ui_ride_create(lv_obj_t *tab)
     ui_fixed_num_create(&s_speed, speed_box, 448, SPEED_COMMA_X, 1,
                         ui_fonts.speed, UI_COL_TEXT, ui_fonts.speed_dec, UI_COL_MUTED);
     lv_obj_align(s_speed.box, LV_ALIGN_CENTER, 0, -16);
+    /* Top-aligned, so that "km/h" stays put when "rückwärts" is added below (N7) */
     s_unit = ui_label(speed_box, ui_fonts.small, UI_COL_MUTED, "km/h");
-    lv_obj_align(s_unit, LV_ALIGN_CENTER, 0, 66);
+    lv_obj_align(s_unit, LV_ALIGN_TOP_MID, 0, SPEED_BOX_H / 2 + 60);
     lv_obj_set_style_text_align(s_unit, LV_TEXT_ALIGN_CENTER, 0);
 
     /* Trip and total distance, close to the speedometer */
@@ -184,8 +185,8 @@ static void measure_card_update(measure_card_t *c, int32_t mm, bool running, uin
         int64_t div = decimals == 2 ? 10 : decimals == 1 ? 100 : 1000;
         ui_fmt_fixed(buf, sizeof(buf), v / div, decimals);
         ui_fixed_num_set(&c->value, buf, "m");
-    } else {                               /* ≥ 100 km: km with metre resolution */
-        ui_fmt_fixed(buf, sizeof(buf), v / 1000, 3);
+    } else {                               /* ≥ 100 km: km with 10 m resolution (2 decimals, N3) */
+        ui_fmt_fixed(buf, sizeof(buf), v / 10000, 2);
         ui_fixed_num_set(&c->value, buf, "km");
     }
 

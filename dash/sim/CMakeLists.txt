@@ -43,6 +43,9 @@ add_custom_command(
 add_executable(dash_sim
     main.c
     sim_core.c
+    headless.c
+    png.c
+    check.c
     ${DASH_DIR}/ui/ui.c
     ${DASH_DIR}/ui/ui_ride.c
     ${DASH_DIR}/ui/ui_led.c
@@ -56,4 +59,11 @@ target_include_directories(dash_sim PRIVATE
     ${REPO_DIR}/common/include)
 
 target_compile_options(dash_sim PRIVATE -Wall -Wextra -Wno-unused-parameter)
-target_link_libraries(dash_sim PRIVATE lvgl PkgConfig::SDL2 m)
+find_package(ZLIB REQUIRED)
+target_link_libraries(dash_sim PRIVATE lvgl PkgConfig::SDL2 ZLIB::ZLIB m)
+
+# GUI checks (ADR 0016): approved references live in the repository,
+# results and diff images in the build directory
+target_compile_definitions(dash_sim PRIVATE
+    SIM_REFERENCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/reference"
+    SIM_CHECK_OUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/check")

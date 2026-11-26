@@ -8,6 +8,7 @@ ui_fonts_t ui_fonts;
 ui_actions_t ui_actions;
 
 static lv_obj_t *s_tabview;
+static lv_obj_t *s_tabs[3];
 
 static lv_font_t s_text_fonts[3];
 
@@ -222,13 +223,15 @@ void ui_init(const ui_actions_t *actions, const void *font_data, size_t font_siz
     lv_obj_set_style_text_font(bar, ui_fonts.small, 0);
 
     /* Icon above text */
-    lv_obj_t *tabs[3];
+    lv_obj_t **tabs = s_tabs;
     tabs[UI_TAB_RIDE] = lv_tabview_add_tab(s_tabview, LV_SYMBOL_HOME "\nFahrt");
     tabs[UI_TAB_LED] = lv_tabview_add_tab(s_tabview, LV_SYMBOL_IMAGE "\nLED");
     tabs[UI_TAB_SETTINGS] = lv_tabview_add_tab(s_tabview, LV_SYMBOL_SETTINGS "\nEinstellungen");
 
     for (uint32_t i = 0; i < 3; i++) {
         lv_obj_t *btn = lv_obj_get_child(bar, (int32_t)i);
+        lv_obj_set_style_text_color(btn, UI_COL_MUTED, 0);                 /* C1 */
+        lv_obj_set_style_text_color(btn, UI_COL_ACCENT, LV_STATE_CHECKED);
         lv_obj_t *label = lv_obj_get_child(btn, 0);
         if (label != NULL) {
             lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
@@ -259,4 +262,16 @@ void ui_show_tab(uint32_t index)
 void ui_scroll_led_page(bool to_bottom)
 {
     ui_led_scroll(to_bottom);
+}
+
+lv_obj_t *ui_get_tab(uint32_t index)
+{
+    return index < 3 ? s_tabs[index] : NULL;
+}
+
+void ui_scroll_page(bool to_bottom)
+{
+    lv_obj_t *tab = s_tabs[lv_tabview_get_tab_active(s_tabview)];
+    lv_obj_update_layout(tab);
+    lv_obj_scroll_to_y(tab, to_bottom ? LV_COORD_MAX : 0, LV_ANIM_OFF);
 }

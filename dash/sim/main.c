@@ -5,19 +5,21 @@
  *   dash_sim --zoom <f>               scale the window (e.g. 0.6), layout stays 480×800
  *   dash_sim --link-drops             simulate a lost core link (2 s every 30 s)
  *   dash_sim --screenshot <dir>       headless: run the simulation and write
- *            [--time <s>]             screenshots (BMP) of all screens
- *            [--measure]              start the distance measurement at t = 5 s
+ *            [--time <s>]             screenshots (PNG) of all screens
+ *            [--measure]              start the distance measurements at t = 5 s / 12 s
+ *   dash_sim --check                  headless GUI checks against docs/ui-guidelines.md
+ *            [--update-references]    and the reference screenshots (ADR 0016)
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "check.h"
+#include "headless.h"
 #include "lvgl.h"
 #include "sim_core.h"
 #include "ui.h"
 
-#define HOR_RES 480
-#define VER_RES 800
 #define MODEL_PERIOD_MS 50   /* status frames arrive every 50 ms (ADR 0004) */
 
 extern const unsigned char ui_font_data[];
@@ -25,75 +27,11 @@ extern const unsigned long ui_font_data_size;
 
 static ui_model_t s_model;
 
-/* ---- headless rendering --------------------------------------------------- */
-
-static uint32_t s_fake_ms;
-static uint16_t s_fb[HOR_RES * VER_RES] __attribute__((aligned(64)));
-
-static uint32_t fake_tick(void)
-{
-    return s_fake_ms;
-}
-
-static void headless_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
-{
-    (void)area;
-    (void)px_map;   /* direct mode: LVGL renders straight into s_fb */
-    lv_display_flush_ready(disp);
-}
-
-static void run_lvgl(uint32_t ms)
-{
-    for (uint32_t t = 0; t < ms; t += 10) {
-        s_fake_ms += 10;
-        lv_timer_handler();
-    }
-}
-
-static int write_bmp(const char *path)
-{
-    FILE *f = fopen(path, "wb");
-    if (f == NULL) {
-        perror(path);
-        return -1;
-    }
-    const uint32_t row = HOR_RES * 3;              /* 1440, already 4-byte aligned */
-    const uint32_t data = row * VER_RES;
-    uint8_t h[54] = {'B', 'M'};
-    uint32_t v;
-    v = 54 + data; memcpy(&h[2], &v, 4);
-    v = 54;        memcpy(&h[10], &v, 4);
-    v = 40;        memcpy(&h[14], &v, 4);
-    v = HOR_RES;   memcpy(&h[18], &v, 4);
-    v = VER_RES;   memcpy(&h[22], &v, 4);
-    h[26] = 1;     h[28] = 24;
-    v = data;      memcpy(&h[34], &v, 4);
-    fwrite(h, 1, sizeof(h), f);
-
-    uint8_t line[HOR_RES * 3];
-    for (int y = VER_RES - 1; y >= 0; y--) {       /* BMP is bottom-up */
-        for (int x = 0; x < HOR_RES; x++) {
-            uint16_t p = s_fb[y * HOR_RES + x];
-            uint8_t r = (p >> 11) & 0x1F, g = (p >> 5) & 0x3F, b = p & 0x1F;
-            line[x * 3 + 0] = (uint8_t)((b << 3) | (b >> 2));
-            line[x * 3 + 1] = (uint8_t)((g << 2) | (g >> 4));
-            line[x * 3 + 2] = (uint8_t)((r << 3) | (r >> 2));
-        }
-        fwrite(line, 1, sizeof(line), f);
-    }
-    fclose(f);
-    printf("wrote %s\n", path);
-    return 0;
-}
-
 static void snapshot(const char *dir, const char *name)
 {
     char path[512];
-    lv_obj_invalidate(lv_screen_active());
-    run_lvgl(500);   /* let style transitions finish */
-    lv_refr_now(NULL);
-    snprintf(path, sizeof(path), "%s/%s.bmp", dir, name);
-    write_bmp(path);
+    snprintf(path, sizeof(path), "%s/%s.png", dir, name);
+    headless_write_png(path);
 }
 
 static void model_tick(void)
@@ -105,11 +43,7 @@ static void model_tick(void)
 
 static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
 {
-    lv_tick_set_cb(fake_tick);
-    lv_display_t *disp = lv_display_create(HOR_RES, VER_RES);
-    lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
-    lv_display_set_buffers(disp, s_fb, NULL, sizeof(s_fb), LV_DISPLAY_RENDER_MODE_DIRECT);
-    lv_display_set_flush_cb(disp, headless_flush);
+    headless_init();
 
     ui_init(&sim_core_actions, ui_font_data, ui_font_data_size);
 
@@ -121,7 +55,7 @@ static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
             sim_core_actions.measure_start(NULL, 1);
         }
         model_tick();
-        run_lvgl(MODEL_PERIOD_MS);
+        headless_run(MODEL_PERIOD_MS);
     }
 
     ui_show_tab(0);
@@ -143,7 +77,7 @@ static int run_headless(const char *dir, uint32_t sim_ms, bool measure)
     sim_core_actions.calib_start(NULL);
     for (int i = 0; i < 80; i++) {
         model_tick();
-        run_lvgl(MODEL_PERIOD_MS);
+        headless_run(MODEL_PERIOD_MS);
     }
     snapshot(dir, "calib_counting");
     sim_core_actions.calib_stop(NULL);
@@ -200,6 +134,8 @@ static int run_window(float zoom)
 int main(int argc, char **argv)
 {
     const char *shot_dir = NULL;
+    bool check = false;
+    bool update_refs = false;
     uint32_t sim_ms = 20000;
     bool measure = false;
     float zoom = 0.0f;
@@ -214,15 +150,23 @@ int main(int argc, char **argv)
             measure = true;
         } else if (strcmp(argv[i], "--zoom") == 0 && i + 1 < argc) {
             zoom = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--check") == 0) {
+            check = true;
+        } else if (strcmp(argv[i], "--update-references") == 0) {
+            update_refs = true;
         } else if (strcmp(argv[i], "--link-drops") == 0) {
             opt.link_drops = true;
         } else {
-            fprintf(stderr, "usage: %s [--zoom <f>] [--link-drops] [--screenshot <dir> [--time <s>] [--measure]]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--zoom <f>] [--link-drops] [--screenshot <dir> [--time <s>] [--measure]]\n"
+                            "       %s --check [--update-references]\n", argv[0], argv[0]);
             return 2;
         }
     }
 
     lv_init();
+    if (check) {
+        return check_run(update_refs);
+    }
     sim_core_init(&opt);
 
     return shot_dir ? run_headless(shot_dir, sim_ms, measure) : run_window(zoom);

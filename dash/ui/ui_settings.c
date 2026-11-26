@@ -20,7 +20,7 @@ static lv_obj_t *s_backward;
 static lv_obj_t *s_factor;
 /* History table: header + UI_CALIB_HISTORY rows, 4 fixed-width columns */
 #define HIST_COLS 4
-static const int32_t k_hist_w[HIST_COLS] = {150, 78, 88, 100};   /* sum = 416 = card content width */
+static const int32_t k_hist_w[HIST_COLS] = {150, 78, 88, 98};    /* sum = 414 ≤ card content width */
 static lv_obj_t *s_hist_rows[UI_CALIB_HISTORY];
 static lv_obj_t *s_hist_cell[UI_CALIB_HISTORY][HIST_COLS];
 static lv_obj_t *s_hist_empty;
@@ -229,6 +229,7 @@ static void cal_create(void)
     s_cal_live = ui_label(card, ui_fonts.value, UI_COL_TEXT, "");
     s_cal_hint = ui_label(card, ui_fonts.small, UI_COL_MUTED, "");
     lv_label_set_long_mode(s_cal_hint, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(s_cal_hint, UI_FLAG_WRAP_ALLOWED);
     lv_obj_set_width(s_cal_hint, lv_pct(100));
 
     s_cal_input_row = row(card);
@@ -240,11 +241,14 @@ static void cal_create(void)
     lv_textarea_set_placeholder_text(s_cal_ta, "1000");
     lv_obj_set_flex_grow(s_cal_ta, 1);
     lv_obj_set_style_text_font(s_cal_ta, ui_fonts.value, 0);
+    lv_obj_set_style_bg_color(s_cal_ta, UI_COL_BG, 0);           /* C1 */
+    lv_obj_set_style_border_color(s_cal_ta, UI_COL_BORDER, 0);
     lv_obj_add_event_cb(s_cal_ta, cal_ta_cb, LV_EVENT_VALUE_CHANGED, NULL);
     ui_label(s_cal_input_row, ui_fonts.text, UI_COL_MUTED, "cm");
 
     s_cal_result = ui_label(card, ui_fonts.small, UI_COL_MUTED, "");
     lv_label_set_long_mode(s_cal_result, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(s_cal_result, UI_FLAG_WRAP_ALLOWED);
     lv_obj_set_width(s_cal_result, lv_pct(100));
 
     lv_obj_t *btns = row(card);
@@ -265,6 +269,10 @@ static void cal_create(void)
     lv_obj_set_size(s_cal_kb, lv_pct(100), 300);
     lv_obj_align(s_cal_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_text_font(s_cal_kb, ui_fonts.value, 0);
+    lv_obj_set_style_bg_color(s_cal_kb, UI_COL_CARD, 0);                   /* C1 */
+    lv_obj_set_style_bg_color(s_cal_kb, UI_COL_BORDER, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(s_cal_kb, UI_COL_TEXT, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(s_cal_kb, UI_COL_BORDER, LV_PART_ITEMS | LV_STATE_CHECKED);
 }
 
 static void cal_show_state(uint8_t state)
@@ -367,7 +375,7 @@ static void time_dialog_create(void)
     lv_obj_align(card, LV_ALIGN_CENTER, 0, 0);
 
     lv_obj_t *r = row(card);
-    lv_obj_set_style_pad_column(r, 6, 0);
+    lv_obj_set_style_pad_column(r, 10, 0);   /* I3 */
     static const char *captions[] = {"Tag", "Monat", "Jahr", "Std", "Min"};
     for (int i = 0; i < 5; i++) {
         lv_obj_t *col = lv_obj_create(r);
@@ -379,7 +387,12 @@ static void time_dialog_create(void)
         s_roller[i] = lv_roller_create(col);
         lv_obj_set_style_text_font(s_roller[i], ui_fonts.text, 0);
         lv_roller_set_visible_row_count(s_roller[i], 3);
-        lv_obj_set_width(s_roller[i], i == 2 ? 100 : 70);
+        lv_obj_set_width(s_roller[i], i == 2 ? 96 : 66);
+        lv_obj_set_style_bg_color(s_roller[i], UI_COL_BG, 0);                          /* C1 */
+        lv_obj_set_style_border_color(s_roller[i], UI_COL_BORDER, 0);
+        lv_obj_set_style_text_color(s_roller[i], UI_COL_MUTED, 0);
+        lv_obj_set_style_bg_color(s_roller[i], UI_COL_ACCENT, LV_PART_SELECTED);
+        lv_obj_set_style_text_color(s_roller[i], UI_COL_BG, LV_PART_SELECTED);
     }
     roller_options(s_roller[0], 1, 31, true);
     roller_options(s_roller[1], 1, 12, true);
@@ -433,6 +446,7 @@ void ui_settings_create(lv_obj_t *tab)
     s_disp_slider = lv_slider_create(card);
     lv_slider_set_range(s_disp_slider, 5, 100);   /* never fully dark */
     lv_obj_set_size(s_disp_slider, lv_pct(100), 14);
+    lv_obj_set_ext_click_area(s_disp_slider, 23);   /* 60 px touch height (I1) */
     lv_obj_add_event_cb(s_disp_slider, disp_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_style_pad_bottom(card, 24, 0);
 
@@ -522,6 +536,15 @@ void ui_calib_test_input(const char *ref_cm, bool press_main)
     }
     if (press_main) {
         lv_obj_send_event(s_cal_btn_main, LV_EVENT_CLICKED, NULL);
+    }
+}
+
+void ui_time_dialog_test(bool open)
+{
+    if (open) {
+        time_open_cb(NULL);
+    } else {
+        lv_obj_add_flag(s_time_dlg, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
