@@ -22,9 +22,9 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_FREERTOS_HZ=1000
 CONFIG_SPIRAM_XIP_FROM_PSRAM=y
 
-# Interim partition table with a 1.5 MB app until the dash table is defined
-# (open point, together with the web editor files, ADR 0013)
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+# Same partition table as the dash (ADR 0019), with the partition c6fw
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../partitions.csv"
 
 # Larger L2 cache with 128-byte lines for PSRAM code and frame buffers (ADR 0019)
 CONFIG_CACHE_L2_CACHE_256KB=y

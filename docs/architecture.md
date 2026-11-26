@@ -156,5 +156,3 @@ See [`adr/`](adr/).
   current limit (ADR 0012, 0018)
 - Final strip length and number of end LEDs (set on the dash once mounted, ADR 0018)
 - core partition table: add NVS partition `cfg` (512 KB) for settings and presets
-- dash partition table: NVS, app, web editor files (ADR 0013)
-- ESP32-C6: check ESP-Hosted firmware version, update if needed (ADR 0013)

@@ -157,18 +157,33 @@ dash/main/
     ranges. Loading and saving go through two functions passed in by the caller:
     NVS on the device (`dash/main/settings.c`), RAM in the PC simulator. The
     demo core (`sim_core.c`) then only provides what core will send over UART.
-  - Until the dash partition table is defined together with the editor (it needs
-    a partition for the web files), the NVS partition (24 KB) of the interim
-    table is used. If its position or size changes, the settings fall back to
-    the defaults once.
+  - The NVS partition keeps the position and size of the former interim table
+    (0x9000, 24 KB), so the settings survived the change of the table.
+- **Partition table** (added 2026-11-26, `dash/partitions.csv`, 16 MB flash):
+
+  | Partition | Offset | Size | Purpose |
+  |---|---|---|---|
+  | `nvs` | 0x9000 | 24 KB | dash settings, later the Wi-Fi password |
+  | `otadata` | 0xF000 | 8 KB | selects the app slot to boot |
+  | `ota_0` | 0x20000 | 4 MB | dash firmware |
+  | `ota_1` | 0x420000 | 4 MB | second slot for firmware updates |
+  | `c6fw` | 0x820000 | 2 MB | C6 image for C6 updates (`dash/test/c6_check`) |
+  | `coredump` | 0xA20000 | 64 KB | crash report, `idf.py coredump-info` |
+  | free | 0xA30000 | ~5.8 MB | reserve |
+
+  - Two app slots although the firmware is flashed over USB for now: a later
+    update from the browser (with fallback to the old firmware) needs no new
+    table. The app is ~1 MB today, ~1.5–1.8 MB expected with Wi-Fi and HTTP.
+  - No `phy_init`: the P4 has no radio, the C6 does Wi-Fi.
+  - No partition for the web editor: it is embedded in the firmware (ADR 0013).
 
 ### Order of work
 
 1. Board support (done, verified)
 2. LVGL port with the GUI in demo mode
 3. Settings in NVS
-4. Wi-Fi editor (ADR 0013): check the C6 firmware first, then the dash partition
-   table. Until the UART link exists, the editor works against the demo core
+4. Wi-Fi editor (ADR 0013): C6 firmware check and update (done), dash partition
+   table (done), then access point, HTTP server and the editor. Until the UART link exists, the editor works against the demo core
    (presets kept in dash RAM), like the mock dash of the dev server.
 5. UART link with the protocol (testable against a minimal protocol responder on
    the S3 before the real core firmware exists)
@@ -181,7 +196,6 @@ dash/main/
   here and in `board.c`.
 - The component manager downloads LVGL once at the first build (network needed
   then); the version is pinned.
-- Until the dash partition table is defined (with the web editor files,
-  ADR 0013), the firmware uses the ESP-IDF table with a 1.5 MB app partition
-  (~1 MB used).
+- Changing the partition table later should keep `nvs` at 0x9000 with 24 KB,
+  otherwise the settings fall back to the defaults once.
 - Demo mode allows GUI work on the device without core.

@@ -1,15 +1,9 @@
 menu "C6 check"
     config C6_CHECK_OTA
-        bool "Update the C6 (ESP-Hosted OTA) from an image in the P4 flash"
+        bool "Update the C6 (ESP-Hosted OTA) from the image in the partition c6fw"
         default n
         help
-            Reads an ESP32-C6 ESP-Hosted image from the raw P4 flash at
-            C6_CHECK_OTA_OFFSET (written there with esptool, outside all
-            partitions) and sends it to the C6 over SDIO. Skipped if the C6
-            already runs that version.
-
-    config C6_CHECK_OTA_OFFSET
-        hex "Flash offset of the C6 image"
-        default 0x800000
-        depends on C6_CHECK_OTA
+            Reads an ESP32-C6 ESP-Hosted image from the partition c6fw
+            (dash/partitions.csv, written with parttool.py) and sends it to the
+            C6 over SDIO. Skipped if the C6 already runs that version.
 endmenu

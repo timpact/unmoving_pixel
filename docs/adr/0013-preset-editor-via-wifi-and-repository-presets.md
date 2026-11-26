@@ -73,8 +73,9 @@ presets/
 ### Web editor
 
 - A single-page web app (HTML/CSS/JavaScript, no build-time framework required),
-  stored gzip-compressed in a dash flash partition and served by
-  `esp_http_server`.
+  stored gzip-compressed in the dash firmware (embedded files, ~35 KB) and
+  served by `esp_http_server` (updated 2026-11-26: no separate flash partition;
+  editor and dash API always match, one flash step, no file system; ADR 0019).
 - The same web app lives in the repository (`tools/preset-editor/`) and can be
   opened locally on the desktop without the scooter; it then works on files
   (import/export) only.
@@ -179,5 +180,5 @@ browser ──HTTP──► dash ──UART (ADR 0004)──► core ──► c
   (`dash/test/c6_check`, ADR 0019). Recovery if an update fails: the C6 UART0
   pins (ADR 0006). Host and C6 versions are changed together only.
 - Extra current draw while Wi-Fi is on (on demand only).
-- A dash flash partition for the web app is needed (e.g. 1–2 MB); the dash
-  partition table has to be defined.
+- Every change of the web app needs a dash firmware build (both live in the
+  same repository).

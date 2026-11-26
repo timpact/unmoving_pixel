@@ -3,8 +3,8 @@
  * co-processor over SDIO and does one Wi-Fi scan through it.
  * Only the number of networks is logged.
  *
- * C6_CHECK_OTA (menuconfig): additionally updates the C6 from an image in the raw
- * P4 flash (see README.md). Otherwise the C6 is not changed.
+ * C6_CHECK_OTA (menuconfig): additionally updates the C6 from the image in the
+ * partition c6fw (see README.md). Otherwise the C6 is not changed.
  */
 #include <inttypes.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@
 #include "esp_app_desc.h"
 #include "esp_app_format.h"
 #include "esp_event.h"
-#include "esp_flash.h"
+#include "esp_partition.h"
 #include "esp_hosted.h"
 #include "esp_hosted_host_fw_ver.h"
 #include "esp_hosted_misc.h"
@@ -32,16 +32,21 @@
 static const char *TAG = "c6_check";
 
 #if CONFIG_C6_CHECK_OTA
-#define OTA_OFFSET CONFIG_C6_CHECK_OTA_OFFSET
+static const esp_partition_t *s_part;   /* "c6fw" (dash/partitions.csv) */
 #define OTA_CHUNK  1480
 
-/* Size of the ESP image at OTA_OFFSET: header, segments, padding and checksum
- * to 16 bytes, SHA-256 if appended. Checks magic and chip (ESP32-C6). */
+/* Size of the ESP image in the c6fw partition: header, segments, padding and
+ * checksum to 16 bytes, SHA-256 if appended. Checks magic and chip (ESP32-C6). */
 static size_t image_size(char *version, size_t version_len)
 {
     esp_image_header_t h;
-    if (esp_flash_read(NULL, &h, OTA_OFFSET, sizeof(h)) != ESP_OK || h.magic != ESP_IMAGE_HEADER_MAGIC) {
-        ESP_LOGE(TAG, "OTA: no ESP image at 0x%x", OTA_OFFSET);
+    s_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "c6fw");
+    if (s_part == NULL) {
+        ESP_LOGE(TAG, "OTA: no partition c6fw (dash/partitions.csv)");
+        return 0;
+    }
+    if (esp_partition_read(s_part, 0, &h, sizeof(h)) != ESP_OK || h.magic != ESP_IMAGE_HEADER_MAGIC) {
+        ESP_LOGE(TAG, "OTA: no ESP image in partition c6fw");
         return 0;
     }
     if (h.chip_id != ESP_CHIP_ID_ESP32C6) {
@@ -51,17 +56,21 @@ static size_t image_size(char *version, size_t version_len)
     size_t off = sizeof(h);
     for (int i = 0; i < h.segment_count; i++) {
         esp_image_segment_header_t seg;
-        if (esp_flash_read(NULL, &seg, OTA_OFFSET + off, sizeof(seg)) != ESP_OK || seg.data_len > 0x400000) {
+        if (esp_partition_read(s_part, off, &seg, sizeof(seg)) != ESP_OK || seg.data_len > 0x400000) {
             ESP_LOGE(TAG, "OTA: segment %d unreadable", i);
             return 0;
         }
         if (i == 0) {
             esp_app_desc_t d;
-            esp_flash_read(NULL, &d, OTA_OFFSET + off + sizeof(seg), sizeof(d));
+            esp_partition_read(s_part, off + sizeof(seg), &d, sizeof(d));
             snprintf(version, version_len, "%.31s", d.version);
             ESP_LOGI(TAG, "OTA: image \"%.31s\" version %s", d.project_name, version);
         }
         off += sizeof(seg) + seg.data_len;
+        if (off > s_part->size) {
+            ESP_LOGE(TAG, "OTA: image larger than the partition");
+            return 0;
+        }
     }
     off = (off + 1 + 15) & ~(size_t)15;   /* padding + checksum byte */
     if (h.hash_appended) {
@@ -93,7 +102,7 @@ static void c6_ota(const esp_hosted_coprocessor_fwver_t *cur)
     int64_t t0 = esp_timer_get_time();
     for (size_t off = 0; off < size; off += OTA_CHUNK) {
         size_t n = size - off < OTA_CHUNK ? size - off : OTA_CHUNK;
-        err = esp_flash_read(NULL, chunk, OTA_OFFSET + off, n);
+        err = esp_partition_read(s_part, off, chunk, n);
         if (err == ESP_OK) {
             err = esp_hosted_slave_ota_write(chunk, n);
         }
