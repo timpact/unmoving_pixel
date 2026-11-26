@@ -14,11 +14,14 @@
  */
 import { hexToRgb, linearToSrgb, srgbToLinear } from './model.js';
 
-export const STRIP = Object.freeze({
-    leds: 72,
-    pitchMm: 1000 / 144,   /* 144 LEDs/m, ADR 0003 */
-    lengthMm: 500,
-});
+/* Geometry of the main part of a strip with `leds` LEDs (ADR 0003, 0018) */
+export function stripGeometry(leds) {
+    const pitchMm = 1000 / 144;   /* 144 LEDs/m */
+    return Object.freeze({ leds, pitchMm, lengthMm: leds * pitchMm });
+}
+
+/* Default: 72 LEDs = 0.5 m (used without dash settings, e.g. in local mode) */
+export const STRIP = stripGeometry(72);
 
 function smoothstep(t) {
     if (t <= 0) return 0;

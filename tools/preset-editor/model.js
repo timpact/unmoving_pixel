@@ -17,7 +17,7 @@ export const LIMITS = Object.freeze({
     minLengthCm: 1,
     maxLengthCm: 65535,
     nameBytes: 16,
-    stripLengthMm: 500,
+    fadeMaxMm: 1000,      /* overlay fades: maximum main part length (ADR 0012, 0018) */
 });
 
 /* ---- text and numbers ------------------------------------------------------ */
@@ -127,18 +127,21 @@ export function validatePattern(p) {
     return errors;
 }
 
-/* ADR 0012: levels 0 … 100 %, fades ≥ 0 and together not longer than the strip */
-export function validateOverlay(o, stripLengthMm = LIMITS.stripLengthMm) {
+/*
+ * ADR 0012/0018: levels 0 … 100 %, fades 0 … 1000 mm and together at most 1000 mm
+ * (maximum main part length). On a shorter strip both fades are scaled down.
+ */
+export function validateOverlay(o, maxMm = LIMITS.fadeMaxMm) {
     const errors = nameErrors(o?.name);
     for (const k of ['level_start', 'level_mid', 'level_end']) {
         if (!isInt(o?.[k], 0, 100)) errors.push({ path: k, message: 'Pegel 0 … 100 %' });
     }
     for (const k of ['fade_start_mm', 'fade_end_mm']) {
-        if (!isInt(o?.[k], 0, stripLengthMm)) errors.push({ path: k, message: `Übergang 0 … ${stripLengthMm} mm` });
+        if (!isInt(o?.[k], 0, maxMm)) errors.push({ path: k, message: `Übergang 0 … ${formatNumber(maxMm)} mm` });
     }
     if (isInt(o?.fade_start_mm, 0, 65535) && isInt(o?.fade_end_mm, 0, 65535) &&
-        o.fade_start_mm + o.fade_end_mm > stripLengthMm) {
-        errors.push({ path: 'fade_end_mm', message: `Übergänge zusammen max. ${stripLengthMm} mm` });
+        o.fade_start_mm + o.fade_end_mm > maxMm) {
+        errors.push({ path: 'fade_end_mm', message: `Übergänge zusammen max. ${formatNumber(maxMm)} mm` });
     }
     return errors;
 }

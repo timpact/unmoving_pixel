@@ -133,6 +133,7 @@ async function mockAction(req, res, action) {
     if (action === 'overlay') r = dash.dashSetOverlay(body.values ?? {});
     else if (action === 'select') r = dash.select(body.category, Number(body.slot));
     else if (action === 'touch') r = dash.touch(body.category, Number(body.slot));
+    else if (action === 'layout') r = dash.setLayout({ main_leds: Number(body.main_leds) });
     else return send(res, 404, { error: 'Unbekannte Aktion' });
     console.log(`[dash] ${action} ${JSON.stringify(body)} → ${r.status}${r.body?.error ? ' ' + r.body.error : ''}`);
     return send(res, r.status, r.body);
@@ -163,6 +164,11 @@ const MOCK_PAGE = `<!doctype html>
 <section>
   <h2>Muster wählen</h2>
   <div class="row"><select id="pat"></select><button data-touch="patterns">Am dash ändern (Konflikt testen)</button></div>
+</section>
+<section>
+  <h2>LED-Streifen</h2>
+  <p>Länge des Hauptteils, wie in den dash-Einstellungen (ADR 0018). Der Editor passt Vorschau und Overlay-Kurve an.</p>
+  <label><span>Hauptteil</span><input type="range" id="main" min="36" max="144" step="1"><output id="main-out"></output></label>
 </section>
 <section>
   <h2>Overlay</h2>
@@ -200,12 +206,16 @@ async function refresh() {
   const s = await (await fetch('/api/state')).json();
   fill(document.getElementById('pat'), s.patterns, s.settings.active_pattern);
   fill(document.getElementById('ovl'), s.overlays, s.settings.active_overlay);
+  if (document.activeElement !== main) { main.value = s.settings.main_leds; document.getElementById('main-out').textContent = main.value + ' LEDs'; }
   for (const input of sliders.querySelectorAll('input')) {
     if (document.activeElement === input) continue;
     input.value = s.settings.overlay?.[input.dataset.k] ?? 0;
     input.nextElementSibling.textContent = input.value + ' ' + (input.dataset.k.endsWith('mm') ? 'mm' : '%');
   }
 }
+const main = document.getElementById('main');
+main.addEventListener('input', () => { document.getElementById('main-out').textContent = main.value + ' LEDs'; });
+main.addEventListener('change', () => call('layout', { main_leds: main.value }));
 document.getElementById('pat').onchange = (e) => call('select', { category:'patterns', slot:e.target.value });
 document.getElementById('ovl').onchange = (e) => call('select', { category:'overlays', slot:e.target.value });
 for (const b of document.querySelectorAll('[data-touch]')) {

@@ -88,6 +88,15 @@ test('deleting the active preset falls back to slot 0', () => {
     assert.equal(d.settings.active_pattern, 0);
 });
 
+test('strip layout from the dash settings (ADR 0018)', () => {
+    const d = new MockDash(builtins());
+    assert.equal(d.state().body.settings.main_leds, 72);
+    assert.equal(d.setLayout({ main_leds: 101 }).status, 200);
+    assert.equal(d.state().body.settings.main_leds, 101);
+    assert.equal(d.setLayout({ main_leds: 200 }).status, 400);
+    assert.equal(d.setLayout({ rear_leds: 9 }).status, 400);
+});
+
 test('export contains only user presets', () => {
     const d = new MockDash(builtins());
     d.put('overlays', SLOTS.overlays.builtin, { base_revision: null, preset: newOverlay('Mein') });

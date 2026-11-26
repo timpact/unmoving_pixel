@@ -117,9 +117,9 @@ They are computed per frame on core from the time since the state change; with
 
 - **Blinking:** 1.5 Hz (90 flashes per minute, period ~667 ms), generated on core,
   so it keeps running if the link to the dash fails. The blinking is **smooth, not
-  hard on/off**: each flash rises over ~100 ms, stays at full level, and falls
-  over ~150 ms, both along an S-curve (smoothstep, as in ADR 0012); about half of
-  the period is at full level.
+  hard on/off**: each flash rises over ~100 ms, stays at full level for ~250 ms,
+  falls over ~150 ms (both along an S-curve, smoothstep as in ADR 0012) and is
+  dark for the remaining ~170 ms. Implemented in `common/src/up_lights.c`.
 - **Turn signal off automatically** after 30 s or after 10 m travelled since it
   was switched on, whichever comes first. Tapping the same button again switches
   it off; tapping the other side switches over. Hazard lights stay on until
@@ -136,7 +136,7 @@ They are computed per frame on core from the time since the state change; with
     (from off, or from the tail light level to 100 %), and falls back over
     ~200 ms when the brake light goes off
   - works independently of "light on" and can be disabled in the settings
-  - reaction time ~100–150 ms until the brake light starts to rise (dominated by
+  - reaction time ~150 ms until the brake light starts to rise (dominated by
     the speed smoothing), full brightness ~100 ms later
 - **Light brightness:** separate setting (10 … 100 %), independent of the global
   pattern brightness and the overlay.

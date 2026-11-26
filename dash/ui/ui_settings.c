@@ -26,6 +26,22 @@ static lv_obj_t *s_hist_cell[UI_CALIB_HISTORY][HIST_COLS];
 static lv_obj_t *s_hist_empty;
 static lv_obj_t *s_time_val;
 
+/* Strip layout and lights (ADR 0018) */
+typedef enum { STEP_MAIN, STEP_FRONT, STEP_REAR, STEP_BRAKE, STEP_COUNT } stepper_t;
+static lv_obj_t *s_step_val[STEP_COUNT];
+static lv_obj_t *s_step_sub[STEP_COUNT];
+static lv_obj_t *s_dir_dd[2];
+static lv_obj_t *s_light_slider;
+static lv_obj_t *s_light_val;
+static lv_obj_t *s_brake_sw;
+static uint8_t s_main_leds = UP_STRIP_MAIN_DEF;
+static uint8_t s_front_leds = UP_STRIP_END_DEF;
+static uint8_t s_rear_leds = UP_STRIP_END_DEF;
+static uint8_t s_layout_flags = UP_LAYOUT_LEFT_DATA_FRONT | UP_LAYOUT_RIGHT_DATA_FRONT;
+static uint8_t s_light_brightness = 60;
+static bool s_brake_enabled = true;
+static uint8_t s_brake_threshold = 10;
+
 /* Calibration dialog */
 static lv_obj_t *s_cal;
 static lv_obj_t *s_cal_title;
@@ -436,6 +452,193 @@ static void resolution_cb(lv_event_t *e)
     }
 }
 
+/* ---- strip layout and lights (ADR 0018) --------------------------------- */
+
+static void send_layout(void)
+{
+    if (ui_actions.set_strip_layout) {
+        ui_actions.set_strip_layout(ui_actions.ctx, s_main_leds, s_front_leds, s_rear_leds, s_layout_flags);
+    }
+}
+
+static void send_light_settings(void)
+{
+    if (ui_actions.set_light_settings) {
+        ui_actions.set_light_settings(ui_actions.ctx, s_light_brightness, s_brake_enabled, s_brake_threshold);
+    }
+}
+
+static uint8_t step_value(uint8_t v, int delta, int min, int max)
+{
+    int n = (int)v + delta;
+    return (uint8_t)(n < min ? min : n > max ? max : n);
+}
+
+static void stepper_cb(lv_event_t *e)
+{
+    intptr_t code = (intptr_t)lv_event_get_user_data(e);
+    stepper_t which = (stepper_t)(code >> 1);
+    int delta = (code & 1) ? 1 : -1;
+    switch (which) {
+    case STEP_MAIN:  s_main_leds = step_value(s_main_leds, delta, UP_STRIP_MAIN_MIN, UP_STRIP_MAIN_MAX); break;
+    case STEP_FRONT: s_front_leds = step_value(s_front_leds, delta, 0, UP_STRIP_END_MAX); break;
+    case STEP_REAR:  s_rear_leds = step_value(s_rear_leds, delta, 0, UP_STRIP_END_MAX); break;
+    case STEP_BRAKE: s_brake_threshold = step_value(s_brake_threshold, delta, 5, 30); break;
+    default: return;
+    }
+    if (which == STEP_BRAKE) {
+        send_light_settings();
+    } else {
+        send_layout();
+    }
+}
+
+static void dir_cb(lv_event_t *e)
+{
+    lv_obj_t *dd = lv_event_get_target(e);
+    uint8_t bit = dd == s_dir_dd[0] ? UP_LAYOUT_LEFT_DATA_FRONT : UP_LAYOUT_RIGHT_DATA_FRONT;
+    if (lv_dropdown_get_selected(dd) == 0) {
+        s_layout_flags |= bit;
+    } else {
+        s_layout_flags &= (uint8_t)~bit;
+    }
+    send_layout();
+}
+
+static void light_slider_cb(lv_event_t *e)
+{
+    s_light_brightness = (uint8_t)lv_slider_get_value(lv_event_get_target(e));
+    char buf[16];
+    lv_snprintf(buf, sizeof(buf), "%d %%", s_light_brightness);
+    ui_set_text(s_light_val, buf);
+    send_light_settings();
+}
+
+static void brake_sw_cb(lv_event_t *e)
+{
+    s_brake_enabled = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+    send_light_settings();
+}
+
+/* Row: name, value (and a small second line), − and + buttons (repeat on long press) */
+static void stepper_row(lv_obj_t *card, stepper_t which, const char *name)
+{
+    lv_obj_t *r = row(card);
+    lv_obj_t *text = lv_obj_create(r);
+    lv_obj_remove_style_all(text);
+    lv_obj_set_flex_grow(text, 1);
+    lv_obj_set_height(text, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
+    ui_label(text, ui_fonts.small, UI_COL_MUTED, name);
+    s_step_val[which] = ui_label(text, ui_fonts.text, UI_COL_TEXT, "");
+    s_step_sub[which] = ui_label(text, ui_fonts.small, UI_COL_MUTED, "");
+    for (int up = 0; up < 2; up++) {
+        lv_obj_t *b = lv_button_create(r);
+        lv_obj_set_size(b, 60, 60);
+        lv_obj_set_style_radius(b, 14, 0);
+        lv_obj_set_style_shadow_width(b, 0, 0);
+        lv_obj_set_style_bg_color(b, UI_COL_BORDER, 0);
+        void *code = (void *)(intptr_t)((which << 1) | up);
+        lv_obj_add_event_cb(b, stepper_cb, LV_EVENT_CLICKED, code);
+        lv_obj_add_event_cb(b, stepper_cb, LV_EVENT_LONG_PRESSED_REPEAT, code);
+        lv_obj_t *l = ui_label(b, ui_fonts.text, UI_COL_TEXT, up ? LV_SYMBOL_PLUS : LV_SYMBOL_MINUS);
+        lv_obj_center(l);
+    }
+}
+
+static lv_obj_t *settings_dropdown(lv_obj_t *card, const char *options, lv_event_cb_t cb)
+{
+    lv_obj_t *dd = lv_dropdown_create(card);
+    lv_obj_set_width(dd, lv_pct(100));
+    lv_dropdown_set_options(dd, options);
+    lv_obj_set_style_bg_color(dd, UI_COL_BG, 0);
+    lv_obj_set_style_border_color(dd, UI_COL_BORDER, 0);
+    lv_obj_set_style_text_font(lv_dropdown_get_list(dd), ui_fonts.text, 0);
+    lv_obj_add_event_cb(dd, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    return dd;
+}
+
+static void strip_cards_create(lv_obj_t *tab)
+{
+    lv_obj_t *card = ui_card(tab, "LED-Streifen");
+    stepper_row(card, STEP_MAIN, "Hauptteil (zum Boden)");
+    stepper_row(card, STEP_FRONT, "Ende vorn (Licht)");
+    stepper_row(card, STEP_REAR, "Ende hinten (Licht)");
+    ui_label(card, ui_fonts.small, UI_COL_TEXT, "Dateneingang linker Streifen");
+    s_dir_dd[0] = settings_dropdown(card, "vorn\nhinten", dir_cb);
+    ui_label(card, ui_fonts.small, UI_COL_TEXT, "Dateneingang rechter Streifen");
+    s_dir_dd[1] = settings_dropdown(card, "vorn\nhinten", dir_cb);
+
+    card = ui_card(tab, "Licht");
+    lv_obj_t *r = row(card);
+    ui_label(r, ui_fonts.small, UI_COL_MUTED, "Helligkeit Blinker und Licht");
+    s_light_val = ui_label(r, ui_fonts.text, UI_COL_TEXT, "");
+    s_light_slider = lv_slider_create(card);
+    lv_slider_set_range(s_light_slider, 10, 100);
+    lv_obj_set_size(s_light_slider, lv_pct(100), 14);
+    lv_obj_set_ext_click_area(s_light_slider, 23);   /* 60 px touch height (I1) */
+    lv_obj_set_style_margin_bottom(s_light_slider, 12, 0);
+    lv_obj_add_event_cb(s_light_slider, light_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    r = row(card);
+    ui_label(r, ui_fonts.text, UI_COL_TEXT, "Bremslicht");
+    s_brake_sw = lv_switch_create(r);
+    lv_obj_set_ext_click_area(s_brake_sw, 16);
+    lv_obj_set_style_bg_color(s_brake_sw, UI_COL_BORDER, LV_PART_MAIN);   /* C1 */
+    lv_obj_add_event_cb(s_brake_sw, brake_sw_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    stepper_row(card, STEP_BRAKE, "Bremsschwelle");
+}
+
+static void strip_cards_update(const ui_model_t *m)
+{
+    char buf[32];
+    char num[16];
+    s_main_leds = m->main_leds;
+    s_front_leds = m->front_leds;
+    s_rear_leds = m->rear_leds;
+    s_layout_flags = m->layout_flags;
+    s_light_brightness = m->light_brightness;
+    s_brake_enabled = m->brake_enabled;
+    s_brake_threshold = m->brake_threshold;
+
+    lv_snprintf(buf, sizeof(buf), "%d LEDs", m->main_leds);
+    ui_set_text(s_step_val[STEP_MAIN], buf);
+    ui_fmt_fixed(num, sizeof(num), (UP_STRIP_MAIN_MM(m->main_leds) + 5) / 10, 0);
+    lv_snprintf(buf, sizeof(buf), "%s cm", num);
+    ui_set_text(s_step_sub[STEP_MAIN], buf);
+    lv_snprintf(buf, sizeof(buf), "%d LEDs", m->front_leds);
+    ui_set_text(s_step_val[STEP_FRONT], buf);
+    lv_snprintf(buf, sizeof(buf), "%d LEDs", m->rear_leds);
+    ui_set_text(s_step_val[STEP_REAR], buf);
+    ui_fmt_fixed(num, sizeof(num), m->brake_threshold, 1);
+    lv_snprintf(buf, sizeof(buf), "%s m/s²", num);
+    ui_set_text(s_step_val[STEP_BRAKE], buf);
+    for (int i = STEP_FRONT; i < STEP_COUNT; i++) {
+        lv_obj_add_flag(s_step_sub[i], LV_OBJ_FLAG_HIDDEN);
+    }
+
+    for (int i = 0; i < 2; i++) {
+        uint8_t bit = i == 0 ? UP_LAYOUT_LEFT_DATA_FRONT : UP_LAYOUT_RIGHT_DATA_FRONT;
+        uint32_t sel = (m->layout_flags & bit) ? 0 : 1;
+        if (!lv_dropdown_is_open(s_dir_dd[i]) && lv_dropdown_get_selected(s_dir_dd[i]) != sel) {
+            lv_dropdown_set_selected(s_dir_dd[i], sel);
+        }
+    }
+    if (!lv_obj_has_state(s_light_slider, LV_STATE_PRESSED)) {
+        if (lv_slider_get_value(s_light_slider) != m->light_brightness) {
+            lv_slider_set_value(s_light_slider, m->light_brightness, LV_ANIM_OFF);
+        }
+        lv_snprintf(buf, sizeof(buf), "%d %%", m->light_brightness);
+        ui_set_text(s_light_val, buf);
+    }
+    if (!lv_obj_has_state(s_brake_sw, LV_STATE_PRESSED)) {
+        if (m->brake_enabled) {
+            lv_obj_add_state(s_brake_sw, LV_STATE_CHECKED);
+        } else {
+            lv_obj_remove_state(s_brake_sw, LV_STATE_CHECKED);
+        }
+    }
+}
+
 void ui_settings_create(lv_obj_t *tab)
 {
     /* Display brightness */
@@ -470,6 +673,9 @@ void ui_settings_create(lv_obj_t *tab)
     lv_obj_set_style_border_color(s_backward, UI_COL_BORDER, 0);
     lv_obj_set_style_text_font(lv_dropdown_get_list(s_backward), ui_fonts.text, 0);
     lv_obj_add_event_cb(s_backward, backward_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    /* Strip layout and lights (ADR 0018) */
+    strip_cards_create(tab);
 
     /* Encoder calibration (ADR 0014) */
     card = ui_card(tab, "Drehgeber-Kalibrierung");
@@ -626,6 +832,8 @@ void ui_settings_update(const ui_model_t *m)
     if (!lv_dropdown_is_open(s_backward) && lv_dropdown_get_selected(s_backward) != bw) {
         lv_dropdown_set_selected(s_backward, bw);
     }
+
+    strip_cards_update(m);
 
     /* Calibration */
     s_nm_per_count = m->nm_per_count;

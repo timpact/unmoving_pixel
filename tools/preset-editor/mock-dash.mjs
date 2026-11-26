@@ -49,6 +49,11 @@ export class MockDash {
             active_pattern: 0,
             active_overlay: 0,
             overlay: firstOverlay ? overlayValues(firstOverlay) : null,
+            /* strip layout (ADR 0018) */
+            main_leds: 72,
+            front_leds: 4,
+            rear_leds: 4,
+            layout_flags: 3,
         };
     }
 
@@ -197,6 +202,16 @@ export class MockDash {
         this.store('overlays', slot, next);
         this.settings.overlay = overlayValues(next);
         return ok({ slot });
+    }
+
+    /* Strip layout set on the dash (ADR 0018) */
+    setLayout(values) {
+        const { main_leds: m = this.settings.main_leds, front_leds: f = this.settings.front_leds,
+            rear_leds: r = this.settings.rear_leds } = values ?? {};
+        const ok8 = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+        if (!ok8(m, 36, 144) || !ok8(f, 0, 8) || !ok8(r, 0, 8)) return fail(400, 'Hauptteil 36 … 144, Enden 0 … 8 LEDs');
+        Object.assign(this.settings, { main_leds: m, front_leds: f, rear_leds: r });
+        return ok({});
     }
 
     /* Simulates a change of a user preset from elsewhere (for conflict tests) */

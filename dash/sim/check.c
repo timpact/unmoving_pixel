@@ -289,15 +289,18 @@ static void check_texts(void)
     for (int i = 0; i < s_label_count; i++) {
         check_label(s_labels[i]);
     }
-    /* Overlapping text (e.g. decimals running into the unit) */
+    /* Overlapping text (e.g. decimals running into the unit). Only the visible parts
+       count: a label cut off at the edge of a scrolled page is hidden behind it. */
     for (int i = 0; i < s_label_count; i++) {
-        lv_area_t a, va;
+        lv_area_t a, va, ta;
         if (!visible_area(s_labels[i], &va)) continue;
-        text_box(s_labels[i], &a);
+        text_box(s_labels[i], &ta);
+        if (!area_intersect(&a, &ta, &va)) continue;
         for (int j = i + 1; j < s_label_count; j++) {
-            lv_area_t b, vb, x;
+            lv_area_t b, vb, tb, x;
             if (!visible_area(s_labels[j], &vb)) continue;
-            text_box(s_labels[j], &b);
+            text_box(s_labels[j], &tb);
+            if (!area_intersect(&b, &tb, &vb)) continue;
             if (area_intersect(&x, &a, &b) && lv_area_get_width(&x) > 1 && lv_area_get_height(&x) > 1) {
                 char first[64];
                 snprintf(first, sizeof(first), "%s", ident(s_labels[i]));
@@ -559,6 +562,13 @@ static void base_model(void)
     s_m.active_pattern = 0;
     s_m.active_overlay = 1;
     s_m.strip_length_mm = 500;
+    s_m.main_leds = UP_STRIP_MAIN_DEF;
+    s_m.front_leds = UP_STRIP_END_DEF;
+    s_m.rear_leds = UP_STRIP_END_DEF;
+    s_m.layout_flags = UP_LAYOUT_LEFT_DATA_FRONT | UP_LAYOUT_RIGHT_DATA_FRONT;
+    s_m.light_brightness = 60;
+    s_m.brake_enabled = true;
+    s_m.brake_threshold = 10;
     s_m.patterns.rev = 1;
     preset(&s_m.patterns, 0, true, "Streifen");
     preset(&s_m.patterns, 1, true, "Punkte");
@@ -721,6 +731,18 @@ static void scenarios(void)
     s_m.measure_decimals = 0;
     run_scenario("ride_stopped");
 
+    /* Lights (ADR 0018) */
+    base_model();
+    s_m.ride_panel = UI_RIDE_PANEL_LIGHTS;
+    run_scenario("ride_lights");
+    s_m.lights = UP_SIGNAL_LEFT | UP_LIGHTS_BLINK_ON | UP_LIGHTS_LIGHT_ON;
+    run_scenario("ride_lights_signal_left");
+    s_m.lights = UP_SIGNAL_HAZARD | UP_LIGHTS_BLINK_ON | UP_LIGHTS_BRAKE_ON;
+    run_scenario("ride_lights_hazard_brake");
+    s_m.ride_panel = UI_RIDE_PANEL_MEASURE;
+    s_m.lights = UP_SIGNAL_RIGHT | UP_LIGHTS_BLINK_ON;
+    run_scenario("ride_measure_signal_right");
+
     /* LED */
     base_model();
     show(UI_TAB_LED, false);
@@ -744,6 +766,21 @@ static void scenarios(void)
     base_model();
     show(UI_TAB_SETTINGS, false);
     run_scenario("settings_top");
+    show(UI_TAB_SETTINGS, false);
+    ui_scroll_page_y(330);
+    run_scenario("settings_strip");
+    ui_scroll_page_y(1000);
+    run_scenario("settings_light");
+    s_m.main_leds = UP_STRIP_MAIN_MAX;
+    s_m.front_leds = 0;
+    s_m.rear_leds = UP_STRIP_END_MAX;
+    s_m.layout_flags = UP_LAYOUT_LEFT_DATA_FRONT;
+    s_m.brake_threshold = 30;
+    s_m.light_brightness = 100;
+    s_m.brake_enabled = false;
+    apply();
+    ui_scroll_page_y(330);
+    run_scenario("settings_strip_max");
     history(UI_CALIB_HISTORY);
     apply();
     show(UI_TAB_SETTINGS, true);

@@ -84,7 +84,7 @@
     </section>
 
     <section id="overlay-params" class="panel overlay-only">
-      <div class="section-head"><h2>Parameter</h2><span class="hint">Pegel 0 … 100 %, Übergänge zusammen max. 500 mm</span></div>
+      <div class="section-head"><h2>Parameter</h2><span class="hint">Pegel 0 … 100 %, Übergänge zusammen max. 1.000 mm – bei kürzerem Streifen anteilig gekürzt</span></div>
       <div id="ovl-fields" class="ovl-fields"></div>
       <canvas id="curve-canvas" class="curve-canvas" aria-label="Verlauf über die 72 LEDs"></canvas>
     </section>
@@ -92,7 +92,7 @@
     <section id="preview" class="panel">
       <div class="section-head">
         <h2>Strip-Vorschau</h2>
-        <span class="hint">72 LEDs, 6,94 mm Abstand</span>
+        <span id="strip-info" class="hint"></span>
         <div class="spacer"></div>
         <label for="preview-with" id="preview-with-label">Overlay</label>
         <select id="preview-with" class="select"></select>

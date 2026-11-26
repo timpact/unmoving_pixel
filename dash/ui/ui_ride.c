@@ -7,7 +7,7 @@
 
 #define SPEED_MAX_KMH     16    /* gauge range: 0 … 16 km/h (4 m/s = 14.4 km/h) */
 #define SPEED_MAX_KMH_X10 (SPEED_MAX_KMH * 10)
-#define SPEED_BOX_H       280
+#define SPEED_BOX_H       258   /* scale numbers may reach beyond the box (overflow visible) */
 #define GAUGE_D           244   /* arc diameter */
 #define GAUGE_W           14    /* arc width */
 #define GAUGE_START       135   /* degrees, 0 km/h (LVGL: 0° = right, clockwise) */
@@ -36,6 +36,20 @@ static ui_fixed_num_t s_trip;
 static ui_fixed_num_t s_total;
 static measure_card_t s_meas[UI_MEASURE_COUNT];
 
+/* Switchable area "Messung | Licht" and lights (ADR 0018) */
+static lv_obj_t *s_seg_btn[2];
+static lv_obj_t *s_seg_label[2];
+static lv_obj_t *s_panel[2];
+static lv_obj_t *s_sig_btn[3];         /* left, hazard, right */
+static lv_obj_t *s_sig_label[3][2];    /* icon, caption */
+static lv_obj_t *s_light_btn;
+static lv_obj_t *s_light_label;
+static lv_obj_t *s_brake_label;
+static lv_obj_t *s_arrow[2];           /* turn signal indicator left/right */
+static uint8_t s_signal;
+static bool s_light_on;
+static uint8_t s_panel_shown = 0xFF;
+
 /* ---- events ----------------------------------------------------------- */
 
 static void startstop_cb(lv_event_t *e)
@@ -55,6 +69,30 @@ static void reset_cb(lv_event_t *e)
     measure_card_t *c = lv_event_get_user_data(e);
     if (ui_actions.measure_reset) {
         ui_actions.measure_reset(ui_actions.ctx, c->index);
+    }
+}
+
+static void panel_cb(lv_event_t *e)
+{
+    uint8_t panel = (uint8_t)(intptr_t)lv_event_get_user_data(e);
+    if (ui_actions.set_ride_panel) {
+        ui_actions.set_ride_panel(ui_actions.ctx, panel);
+    }
+}
+
+/* Tapping the active signal again switches it off (ADR 0018) */
+static void signal_cb(lv_event_t *e)
+{
+    uint8_t sig = (uint8_t)(intptr_t)lv_event_get_user_data(e);
+    if (ui_actions.set_signal) {
+        ui_actions.set_signal(ui_actions.ctx, s_signal == sig ? UP_SIGNAL_OFF : sig);
+    }
+}
+
+static void light_cb(lv_event_t *e)
+{
+    if (ui_actions.set_light) {
+        ui_actions.set_light(ui_actions.ctx, !s_light_on);
     }
 }
 
@@ -97,6 +135,57 @@ static lv_obj_t *icon_button(lv_obj_t *parent, const char *icon, lv_color_t colo
     return btn;
 }
 
+static lv_obj_t *flat_button(lv_obj_t *parent, int32_t h, lv_event_cb_t cb, void *user_data)
+{
+    lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_set_height(btn, h);
+    lv_obj_set_flex_grow(btn, 1);
+    lv_obj_set_width(btn, 0);   /* share the row equally */
+    lv_obj_set_style_radius(btn, 14, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_bg_color(btn, UI_COL_BORDER, 0);
+    lv_obj_set_style_pad_all(btn, 4, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
+    return btn;
+}
+
+static void set_button_active(lv_obj_t *btn, lv_obj_t *const *labels, int n, bool active, lv_color_t on_color)
+{
+    lv_obj_set_style_bg_color(btn, active ? on_color : UI_COL_BORDER, 0);
+    for (int i = 0; i < n; i++) {
+        lv_obj_set_style_text_color(labels[i], active ? UI_COL_BG : UI_COL_TEXT, 0);
+    }
+}
+
+static void lights_panel_create(lv_obj_t *parent)
+{
+    static const char *const icons[3] = {LV_SYMBOL_LEFT, LV_SYMBOL_WARNING, LV_SYMBOL_RIGHT};
+    static const char *const captions[3] = {"Blinker links", "Warnblinker", "Blinker rechts"};
+    static const uint8_t signals[3] = {UP_SIGNAL_LEFT, UP_SIGNAL_HAZARD, UP_SIGNAL_RIGHT};
+
+    lv_obj_t *card = ui_card(parent, NULL);
+    lv_obj_set_style_pad_all(card, 12, 0);
+    lv_obj_set_style_pad_row(card, 10, 0);
+
+    lv_obj_t *r = plain_row(card);
+    for (int i = 0; i < 3; i++) {
+        s_sig_btn[i] = flat_button(r, 80, signal_cb, (void *)(intptr_t)signals[i]);
+        lv_obj_set_flex_flow(s_sig_btn[i], LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(s_sig_btn[i], LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_row(s_sig_btn[i], 2, 0);
+        s_sig_label[i][0] = ui_label(s_sig_btn[i], ui_fonts.text, UI_COL_TEXT, icons[i]);
+        s_sig_label[i][1] = ui_label(s_sig_btn[i], ui_fonts.small, UI_COL_TEXT, captions[i]);
+    }
+
+    r = plain_row(card);
+    s_light_btn = flat_button(r, 64, light_cb, NULL);
+    s_light_label = ui_label(s_light_btn, ui_fonts.text, UI_COL_TEXT, "");
+    lv_obj_center(s_light_label);
+    s_brake_label = ui_label(r, ui_fonts.small, UI_COL_DANGER, LV_SYMBOL_STOP "  Bremslicht");
+    lv_obj_set_width(s_brake_label, 150);
+    lv_obj_set_style_text_align(s_brake_label, LV_TEXT_ALIGN_CENTER, 0);
+}
+
 static void measure_card_create(lv_obj_t *parent, measure_card_t *c, uint8_t index)
 {
     char title[32];
@@ -136,6 +225,7 @@ void ui_ride_create(lv_obj_t *tab)
     lv_obj_remove_style_all(speed_box);
     lv_obj_set_size(speed_box, lv_pct(100), SPEED_BOX_H);
     lv_obj_remove_flag(speed_box, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(speed_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 
     s_arc = lv_arc_create(speed_box);
     lv_obj_set_size(s_arc, GAUGE_D, GAUGE_D);
@@ -186,16 +276,41 @@ void ui_ride_create(lv_obj_t *tab)
     lv_obj_align(s_unit, LV_ALIGN_TOP_MID, 0, SPEED_BOX_H / 2 + 60);
     lv_obj_set_style_text_align(s_unit, LV_TEXT_ALIGN_CENTER, 0);
 
+    /* Turn signal indicator (ADR 0018), outside the scale on both sides */
+    s_arrow[0] = ui_label(speed_box, ui_fonts.value, UI_COL_WARN, LV_SYMBOL_LEFT);
+    lv_obj_align(s_arrow[0], LV_ALIGN_LEFT_MID, 8, 0);
+    s_arrow[1] = ui_label(speed_box, ui_fonts.value, UI_COL_WARN, LV_SYMBOL_RIGHT);
+    lv_obj_align(s_arrow[1], LV_ALIGN_RIGHT_MID, -8, 0);
+    lv_obj_add_flag(s_arrow[0], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_arrow[1], LV_OBJ_FLAG_HIDDEN);
+
     /* Trip and total distance, close to the speedometer */
     lv_obj_t *row = plain_row(tab);
     lv_obj_set_style_margin_top(row, -12, 0);
     distance_card(row, "Tagesstrecke", &s_trip, 2);
     distance_card(row, "Gesamt", &s_total, 1);
 
+    /* Switchable area: distance measurements or lights (ADR 0018) */
+    lv_obj_t *seg = plain_row(tab);
+    static const char *const seg_text[2] = {"Messung", "Licht"};
+    for (int i = 0; i < 2; i++) {
+        s_seg_btn[i] = flat_button(seg, 64, panel_cb, (void *)(intptr_t)i);
+        s_seg_label[i] = ui_label(s_seg_btn[i], ui_fonts.text, UI_COL_TEXT, seg_text[i]);
+        lv_obj_center(s_seg_label[i]);
+    }
+
+    for (int i = 0; i < 2; i++) {
+        s_panel[i] = lv_obj_create(tab);
+        lv_obj_remove_style_all(s_panel[i]);
+        lv_obj_set_size(s_panel[i], lv_pct(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(s_panel[i], LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_row(s_panel[i], 10, 0);
+    }
     /* Two independent distance measurements */
     for (uint8_t i = 0; i < UI_MEASURE_COUNT; i++) {
-        measure_card_create(tab, &s_meas[i], i);
+        measure_card_create(s_panel[UI_RIDE_PANEL_MEASURE], &s_meas[i], i);
     }
+    lights_panel_create(s_panel[UI_RIDE_PANEL_LIGHTS]);
 }
 
 /* ---- update ----------------------------------------------------------- */
@@ -277,5 +392,42 @@ void ui_ride_update(const ui_model_t *m)
 
     for (int i = 0; i < UI_MEASURE_COUNT; i++) {
         measure_card_update(&s_meas[i], m->measure_mm[i], m->measure_running[i], m->measure_decimals);
+    }
+
+    /* Switchable area */
+    uint8_t panel = m->ride_panel == UI_RIDE_PANEL_LIGHTS ? UI_RIDE_PANEL_LIGHTS : UI_RIDE_PANEL_MEASURE;
+    if (panel != s_panel_shown) {
+        s_panel_shown = panel;
+        for (int i = 0; i < 2; i++) {
+            if (i == panel) {
+                lv_obj_remove_flag(s_panel[i], LV_OBJ_FLAG_HIDDEN);
+            } else {
+                lv_obj_add_flag(s_panel[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            set_button_active(s_seg_btn[i], &s_seg_label[i], 1, i == panel, UI_COL_ACCENT);
+        }
+    }
+
+    /* Lights (ADR 0018) */
+    s_signal = m->link_ok ? (m->lights & UP_LIGHTS_SIGNAL_MASK) : UP_SIGNAL_OFF;
+    s_light_on = m->link_ok && (m->lights & UP_LIGHTS_LIGHT_ON);
+    static const uint8_t signals[3] = {UP_SIGNAL_LEFT, UP_SIGNAL_HAZARD, UP_SIGNAL_RIGHT};
+    for (int i = 0; i < 3; i++) {
+        set_button_active(s_sig_btn[i], s_sig_label[i], 2, s_signal == signals[i], UI_COL_WARN);
+    }
+    set_button_active(s_light_btn, &s_light_label, 1, s_light_on, UI_COL_ACCENT);
+    ui_set_text(s_light_label, s_light_on ? "Licht an" : "Licht aus");
+    bool brake = m->link_ok && (m->lights & UP_LIGHTS_BRAKE_ON);
+    lv_obj_set_style_opa(s_brake_label, brake ? LV_OPA_COVER : LV_OPA_0, 0);
+
+    bool blink = m->link_ok && (m->lights & UP_LIGHTS_BLINK_ON);
+    for (int side = 0; side < 2; side++) {
+        bool active = s_signal == UP_SIGNAL_HAZARD ||
+                      s_signal == (side == 0 ? UP_SIGNAL_LEFT : UP_SIGNAL_RIGHT);
+        if (active && blink) {
+            lv_obj_remove_flag(s_arrow[side], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_arrow[side], LV_OBJ_FLAG_HIDDEN);
+        }
     }
 }

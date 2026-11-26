@@ -43,8 +43,12 @@ test('validation of patterns (ADR 0011 limits)', () => {
 test('validation of overlays (ADR 0012)', () => {
     assert.deepEqual(validateOverlay(newOverlay()), []);
     assert.deepEqual(validateOverlay({ ...newOverlay(), level_mid: 120 }).map((e) => e.path), ['level_mid']);
-    assert.deepEqual(validateOverlay({ ...newOverlay(), fade_start_mm: 300, fade_end_mm: 300 }).map((e) => e.path),
+    /* fades up to 1000 mm together (maximum main part length, ADR 0018) */
+    assert.deepEqual(validateOverlay({ ...newOverlay(), fade_start_mm: 300, fade_end_mm: 300 }), []);
+    assert.deepEqual(validateOverlay({ ...newOverlay(), fade_start_mm: 600, fade_end_mm: 600 }).map((e) => e.path),
         ['fade_end_mm']);
+    assert.deepEqual(validateOverlay({ ...newOverlay(), fade_start_mm: 1001 }).map((e) => e.path),
+        ['fade_start_mm', 'fade_end_mm']);
 });
 
 test('segment count: append copies of the last, remove from the end, limits', () => {

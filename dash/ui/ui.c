@@ -275,3 +275,10 @@ void ui_scroll_page(bool to_bottom)
     lv_obj_update_layout(tab);
     lv_obj_scroll_to_y(tab, to_bottom ? LV_COORD_MAX : 0, LV_ANIM_OFF);
 }
+
+void ui_scroll_page_y(int32_t y)
+{
+    lv_obj_t *tab = s_tabs[lv_tabview_get_tab_active(s_tabview)];
+    lv_obj_update_layout(tab);
+    lv_obj_scroll_to_y(tab, y, LV_ANIM_OFF);
+}

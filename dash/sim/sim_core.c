@@ -6,7 +6,9 @@
 #include <string.h>
 
 #include "measurement.h"
+#include "up_lights.h"
 #include "up_preset.h"
+#include "up_strip.h"
 
 /* calendar helpers from dash/ui (ui.c) */
 uint32_t ui_make_time(int year, int month, int day, int hour, int minute);
@@ -80,6 +82,12 @@ static struct {
     uint8_t led_notice;
     uint32_t notice_until_ms;
     bool editor_on;
+    up_lights_t lights;      /* end lights (ADR 0018), same code as on core */
+    uint8_t ride_panel;
+    uint8_t main_leds;
+    uint8_t front_leds;
+    uint8_t rear_leds;
+    uint8_t layout_flags;
     /* calibration (ADR 0014) */
     uint8_t calib_state;
     double calib_start_mm;
@@ -109,9 +117,9 @@ static float speed_profile(uint32_t t_ms)
     if (t < 40) {
         return CRUISE_MM_S + 400.0f * sinf(2 * pi * (t - 8) / 12);          /* cruise */
     }
-    if (t < 48) {
+    if (t < 44) {
         float v40 = CRUISE_MM_S + 400.0f * sinf(2 * pi * 32 / 12);
-        return v40 * (1 - smoothstep((t - 40) / 8));                         /* brake */
+        return v40 * (1 - smoothstep((t - 40) / 4));   /* brake, peak ~1.2 m/s²: brake light (ADR 0018) */
     }
     if (t >= 50 && t < 53) {
         return -350.0f * sinf(pi * (t - 50) / 3);                            /* roll back ~0.67 m */
@@ -163,6 +171,11 @@ void sim_core_init(const sim_options_t *opt)
     s.hyst_dir = 1;
     s.trip_start_mm = total_mm() - 12340u * 1000u; /* trip: 12.34 km */
     s.brightness = 80;
+    up_lights_init(&s.lights, 0);
+    s.main_leds = UP_STRIP_MAIN_DEF;
+    s.front_leds = UP_STRIP_END_DEF;
+    s.rear_leds = UP_STRIP_END_DEF;
+    s.layout_flags = UP_LAYOUT_LEFT_DATA_FRONT | UP_LAYOUT_RIGHT_DATA_FRONT;
     s.display_brightness = 70;
     s.measure_decimals = 2;
     for (size_t i = 0; i < sizeof(k_overlays) / sizeof(k_overlays[0]); i++) {
@@ -201,6 +214,7 @@ void sim_core_step(uint32_t dt_ms)
     s.speed_mm_s = speed_profile(s.t_ms);
     s.pos_mm_f += s.speed_mm_s * dt_ms / 1000.0;
     update_travelled();
+    up_lights_update(&s.lights, s.t_ms, (int32_t)lroundf(s.speed_mm_s), total_mm());
     float a = dt_ms / (SMOOTH_MS + dt_ms);
     s.speed_smooth += a * (s.speed_mm_s - s.speed_smooth);
 
@@ -233,7 +247,16 @@ void sim_core_fill_model(ui_model_t *m)
     m->active_pattern = s.active_pattern;
     m->active_overlay = s.active_overlay;
     m->led_notice = s.led_notice;
-    m->strip_length_mm = 500;
+    m->strip_length_mm = UP_STRIP_MAIN_MM(s.main_leds);
+    m->main_leds = s.main_leds;
+    m->front_leds = s.front_leds;
+    m->rear_leds = s.rear_leds;
+    m->layout_flags = s.layout_flags;
+    m->lights = up_lights_status(&s.lights);
+    m->light_brightness = s.lights.light_brightness;
+    m->brake_enabled = s.lights.brake_enabled;
+    m->brake_threshold = s.lights.brake_threshold;
+    m->ride_panel = s.ride_panel;
 
     m->patterns.rev = 1;
     m->patterns.count = sizeof(k_patterns) / sizeof(k_patterns[0]);
@@ -432,6 +455,43 @@ static void act_set_time(void *ctx, uint32_t t)
     printf("[action] time set: %s\n", buf);
 }
 
+/* ---- ADR 0018 ---------------------------------------------------------------- */
+
+static void act_set_ride_panel(void *ctx, uint8_t panel)
+{
+    s.ride_panel = panel;
+    printf("[action] ride panel %s\n", panel == UI_RIDE_PANEL_LIGHTS ? "lights" : "measurement");
+}
+
+static void act_set_signal(void *ctx, uint8_t signal)
+{
+    static const char *const names[] = {"off", "left", "right", "hazard"};
+    up_lights_set_signal(&s.lights, signal, s.t_ms, total_mm());
+    printf("[action] signal %s\n", signal <= UP_SIGNAL_HAZARD ? names[signal] : "?");
+}
+
+static void act_set_light(void *ctx, bool on)
+{
+    up_lights_set_light(&s.lights, on, s.t_ms);
+    printf("[action] light %s\n", on ? "on" : "off");
+}
+
+static void act_set_strip_layout(void *ctx, uint8_t main_leds, uint8_t front, uint8_t rear, uint8_t flags)
+{
+    s.main_leds = main_leds;
+    s.front_leds = front;
+    s.rear_leds = rear;
+    s.layout_flags = flags;
+    printf("[action] strip layout %u + %u + %u LEDs, flags 0x%02x\n", front, main_leds, rear, flags);
+}
+
+static void act_set_light_settings(void *ctx, uint8_t brightness, bool brake_enabled, uint8_t threshold)
+{
+    up_lights_set_settings(&s.lights, brightness, brake_enabled, threshold);
+    printf("[action] light %u %%, brake light %s, threshold %u.%u m/s²\n", brightness,
+           brake_enabled ? "on" : "off", threshold / 10, threshold % 10);
+}
+
 const ui_actions_t sim_core_actions = {
     .ctx = NULL,
     .measure_start = act_measure_start,
@@ -449,4 +509,9 @@ const ui_actions_t sim_core_actions = {
     .calib_apply = act_calib_apply,
     .calib_discard = act_calib_discard,
     .set_time = act_set_time,
+    .set_ride_panel = act_set_ride_panel,
+    .set_signal = act_set_signal,
+    .set_light = act_set_light,
+    .set_strip_layout = act_set_strip_layout,
+    .set_light_settings = act_set_light_settings,
 };

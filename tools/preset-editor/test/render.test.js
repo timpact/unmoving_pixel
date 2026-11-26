@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { STRIP, averageOver, linearSegments, overlayFactor, renderStrip } from '../render.js';
+import { STRIP, averageOver, linearSegments, overlayFactor, renderStrip, stripGeometry } from '../render.js';
 
 const pattern = (segments) => ({ format_version: 1, type: 'pattern', name: 't', segments });
 const white = (cm) => ({ length_cm: cm, color: '#ffffff', brightness: 100 });
@@ -11,6 +11,21 @@ const black = (cm) => ({ length_cm: cm, color: '#000000', brightness: 0 });
 test('strip geometry: 72 LEDs at 144/m = 500 mm', () => {
     assert.equal(STRIP.leds, 72);
     assert.ok(Math.abs(STRIP.leds * STRIP.pitchMm - 500) < 1e-9);
+    assert.ok(Math.abs(stripGeometry(101).lengthMm - 701.39) < 0.01, '0.7 m strip (ADR 0018)');
+});
+
+test('render: configurable main part length (ADR 0018)', () => {
+    const g = stripGeometry(101);
+    const o = { level_start: 0, level_mid: 100, level_end: 0, fade_start_mm: 150, fade_end_mm: 150 };
+    const out = renderStrip({ segments: [{ length_cm: 10, color: '#ffffff', brightness: 100 }] }, o, 0,
+        { leds: g.leds, pitchMm: g.pitchMm });
+    assert.equal(out.length, 101);
+    assert.equal(out[50][0], 255, 'middle full');
+    assert.ok(out[100][0] < 30, 'fade at the real end of the longer strip');
+    /* fades longer than the strip are scaled down proportionally */
+    const big = { level_start: 0, level_mid: 100, level_end: 0, fade_start_mm: 600, fade_end_mm: 400 };
+    assert.equal(overlayFactor(big, 300, 500), 1, 'at the meeting point (0.6 × 500 mm)');
+    assert.ok(overlayFactor(big, 150, 500) < 1);
 });
 
 test('overlay factor matches up_overlay.h', () => {

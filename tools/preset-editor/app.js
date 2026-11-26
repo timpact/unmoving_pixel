@@ -12,7 +12,7 @@ import {
     presetFileName, selectionSummary, serializePreset, setSegmentCount, srgbToLinear, toolDistributeLength,
     toolEveryNth, toolGradient, toolRepeatGroup, totalLengthCm, utf8Length, validateOverlay, validatePattern,
 } from './model.js';
-import { STRIP, overlayFactor, renderStrip } from './render.js';
+import { STRIP, overlayFactor, renderStrip, stripGeometry } from './render.js';
 
 const $ = (id) => document.getElementById(id);
 const CATS = ['patterns', 'overlays'];
@@ -26,6 +26,7 @@ let api = null;
 let conn = 'connecting';   /* 'ok' | 'local' | 'lost' */
 const lists = { patterns: [], overlays: [] };
 let settings = null;
+let strip = STRIP;   /* main part of the strip, from the dash settings (ADR 0018) */
 let tab = 'patterns';
 const docs = {};
 const presetCache = new Map();   /* "cat:slot:rev" → preset, for the preview */
@@ -227,6 +228,11 @@ async function refreshState() {
     }
     if (api.mode === 'dash' && conn !== 'ok') setConn('ok');
     settings = s.settings;
+    if (Number.isInteger(settings?.main_leds) && settings.main_leds !== strip.leds) {
+        strip = stripGeometry(settings.main_leds);
+        renderStripInfo();
+        if (docs.overlays) renderCurve();
+    }
     const changedList = CATS.some((c) => JSON.stringify(lists[c]) !== JSON.stringify(s[c]));
     lists.patterns = s.patterns;
     lists.overlays = s.overlays;
@@ -885,8 +891,8 @@ const OVERLAY_FIELDS = [
     { key: 'level_start', label: 'Pegel Anfang', unit: '%', max: 100, step: 1 },
     { key: 'level_mid', label: 'Pegel Mitte', unit: '%', max: 100, step: 1 },
     { key: 'level_end', label: 'Pegel Ende', unit: '%', max: 100, step: 1 },
-    { key: 'fade_start_mm', label: 'Übergang Anfang', unit: 'mm', max: LIMITS.stripLengthMm, step: 5 },
-    { key: 'fade_end_mm', label: 'Übergang Ende', unit: 'mm', max: LIMITS.stripLengthMm, step: 5 },
+    { key: 'fade_start_mm', label: 'Übergang Anfang', unit: 'mm', max: LIMITS.fadeMaxMm, step: 5 },
+    { key: 'fade_end_mm', label: 'Übergang Ende', unit: 'mm', max: LIMITS.fadeMaxMm, step: 5 },
 ];
 const ovlInputs = {};
 
@@ -948,15 +954,19 @@ function renderCurve() {
     }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    for (const mm of w < 400 ? [0, 250, 500] : [0, 100, 200, 300, 400, 500]) {
-        ctx.fillText(mm + ' mm', Math.min(Math.max(pad.l + (w * mm) / STRIP.lengthMm, pad.l + 20), pad.l + w - 20), pad.t + hgt + 6);
+    const len = strip.lengthMm;
+    const ticks = w < 400 ? [0, Math.round(len / 2), Math.round(len)]
+        : [...Array.from({ length: Math.floor(len / 100) + 1 }, (_, i) => i * 100), Math.round(len)];
+    for (const mm of ticks) {
+        if (mm !== Math.round(len) && len - mm < 60) continue;   /* no overlap with the end label */
+        ctx.fillText(formatNumber(mm) + ' mm', Math.min(Math.max(pad.l + (w * mm) / len, pad.l + 20), pad.l + w - 20), pad.t + hgt + 6);
     }
     if (validateOverlay(o).some((e) => e.path !== 'name')) return;
     /* bars: factor per LED */
-    const bw = w / STRIP.leds;
+    const bw = w / strip.leds;
     ctx.fillStyle = cssVar('--border');
-    for (let i = 0; i < STRIP.leds; i++) {
-        const f = overlayFactor(o, (i + 0.5) * STRIP.pitchMm);
+    for (let i = 0; i < strip.leds; i++) {
+        const f = overlayFactor(o, (i + 0.5) * strip.pitchMm, strip.lengthMm);
         ctx.fillRect(pad.l + i * bw + 1, pad.t + hgt * (1 - f), Math.max(bw - 2, 1), hgt * f);
     }
     /* curve */
@@ -964,7 +974,7 @@ function renderCurve() {
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let x = 0; x <= w; x++) {
-        const f = overlayFactor(o, (x / w) * STRIP.lengthMm);
+        const f = overlayFactor(o, (x / w) * strip.lengthMm, strip.lengthMm);
         const y = pad.t + hgt * (1 - f);
         if (x === 0) ctx.moveTo(pad.l + x, y); else ctx.lineTo(pad.l + x, y);
     }
@@ -978,6 +988,13 @@ const preview = { playing: true, speed: 1, offsetMm: 0, last: 0, withSlot: { pat
 /* The "other" preset shown in the preview: overlay for the pattern tab, pattern for the overlay tab */
 function previewOtherCat() {
     return tab === 'patterns' ? 'overlays' : 'patterns';
+}
+
+/* "72 LEDs, 50 cm" for the preview and the overlay curve (ADR 0018) */
+function renderStripInfo() {
+    const text = `Hauptteil ${strip.leds} LEDs, ${formatNumber(strip.lengthMm / 10, 1)} cm`;
+    $('strip-info').textContent = text;
+    $('curve-canvas').setAttribute('aria-label', `Verlauf über die ${strip.leds} LEDs`);
 }
 
 function renderPreviewSelect() {
@@ -1045,12 +1062,12 @@ async function drawStrip(now) {
         if (valid) {
             const total = totalLengthCm(pattern.segments) * 10;
             const offset = ((preview.offsetMm % total) + total) % total;
-            const leds = renderStrip(pattern, overlay, offset);
+            const leds = renderStrip(pattern, overlay, offset, { leds: strip.leds, pitchMm: strip.pitchMm });
             const pad = 12;
-            const pitch = (width - 2 * pad) / STRIP.leds;
+            const pitch = (width - 2 * pad) / strip.leds;
             const size = Math.max(2, Math.min(pitch - 2, 18));
             /* LEDs */
-            for (let i = 0; i < STRIP.leds; i++) {
+            for (let i = 0; i < strip.leds; i++) {
                 ctx.fillStyle = `rgb(${leds[i].join(',')})`;
                 ctx.fillRect(pad + i * pitch + (pitch - size) / 2, 10, size, size);
             }
@@ -1058,7 +1075,7 @@ async function drawStrip(now) {
             ctx.lineWidth = 1;
             ctx.strokeRect(pad - 4.5, 5.5, width - 2 * pad + 8, size + 9);
             /* ground below the strip at the same scale: it stays put, the strip moves */
-            const scale = pitch / STRIP.pitchMm;
+            const scale = pitch / strip.pitchMm;
             const y = 10 + size + 14;
             let x = -offset * scale;
             let i = 0;
@@ -1299,6 +1316,7 @@ function wire() {
 
 async function start() {
     buildOverlayFields();
+    renderStripInfo();
     updateNthValueField();
     renderGradientStops();
     wire();

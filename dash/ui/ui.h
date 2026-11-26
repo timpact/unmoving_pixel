@@ -12,7 +12,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "up_lights.h"
 #include "up_overlay.h"
+#include "up_strip.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,6 +29,10 @@ extern "C" {
 /* Notices on the LED screen, set and cleared by the app (ADR 0012, 0017) */
 #define UI_LED_NOTICE_NONE         0
 #define UI_LED_NOTICE_NO_FREE_SLOT 1   /* built-in overlay changed, but no user slot free */
+
+/* Switchable area on the ride screen (ADR 0018) */
+#define UI_RIDE_PANEL_MEASURE 0
+#define UI_RIDE_PANEL_LIGHTS  1
 
 #define UI_MEASURE_COUNT 2        /* independent distance measurements (ADR 0008) */
 
@@ -78,6 +84,18 @@ typedef struct {
     uint8_t  calib_history_count;     /* newest entry first */
     ui_calib_entry_t calib_history[UI_CALIB_HISTORY];
 
+    /* Lights (ADR 0018), reported by core */
+    uint8_t  lights;                  /* STATUS byte: UP_LIGHTS_* bits (up_lights.h) */
+    uint8_t  light_brightness;        /* 10 … 100 % */
+    bool     brake_enabled;
+    uint8_t  brake_threshold;         /* 0.1 m/s², 5 … 30 */
+
+    /* Strip layout (ADR 0018), stored on core */
+    uint8_t  main_leds;               /* UP_STRIP_MAIN_MIN … MAX */
+    uint8_t  front_leds;              /* 0 … UP_STRIP_END_MAX */
+    uint8_t  rear_leds;
+    uint8_t  layout_flags;            /* UP_LAYOUT_* */
+
     /* Clock on the dash (no RTC: valid only after it was set) */
     bool     time_valid;
     uint32_t time_now;                /* local time, seconds since 1970-01-01 */
@@ -88,6 +106,7 @@ typedef struct {
                                      0 = 1 m, 1 = 10 cm, 2 = 1 cm */
     bool    measure_add_backward; /* false: backward travel is subtracted (default),
                                      true: backward travel is added (ADR 0015) */
+    uint8_t ride_panel;           /* UI_RIDE_PANEL_* (ADR 0018) */
 
     /* LED settings (ADR 0012) */
     uint8_t      global_brightness;   /* 0 … 100 % */
@@ -96,7 +115,7 @@ typedef struct {
     uint8_t      active_overlay;      /* slot; slider changes are written into this
                                          preset, a built-in one is copied first (ADR 0017) */
     uint8_t      led_notice;          /* UI_LED_NOTICE_* */
-    uint16_t     strip_length_mm;     /* for the overlay preview */
+    uint16_t     strip_length_mm;     /* main part length, for the overlay preview (ADR 0018) */
 
     ui_preset_list_t patterns;
     ui_preset_list_t overlays;
@@ -127,6 +146,13 @@ typedef struct {
     void (*calib_apply)(void *ctx, uint32_t ref_cm);   /* the app adds the timestamp */
     void (*calib_discard)(void *ctx);
     void (*set_time)(void *ctx, uint32_t local_time);
+    /* ADR 0018 */
+    void (*set_ride_panel)(void *ctx, uint8_t panel);                  /* stored on the dash */
+    void (*set_signal)(void *ctx, uint8_t signal);                     /* UP_SIGNAL_* */
+    void (*set_light)(void *ctx, bool on);
+    void (*set_strip_layout)(void *ctx, uint8_t main_leds, uint8_t front_leds, uint8_t rear_leds,
+                             uint8_t layout_flags);
+    void (*set_light_settings)(void *ctx, uint8_t brightness, bool brake_enabled, uint8_t threshold);
 } ui_actions_t;
 
 /*
@@ -142,6 +168,7 @@ void ui_update(const ui_model_t *model);
 void ui_show_tab(uint32_t index);
 void ui_scroll_led_page(bool to_bottom);
 void ui_scroll_page(bool to_bottom);            /* active tab */
+void ui_scroll_page_y(int32_t y);               /* active tab, scroll position in px */
 struct _lv_obj_t *ui_get_tab(uint32_t index);
 void ui_time_dialog_test(bool open);
 
